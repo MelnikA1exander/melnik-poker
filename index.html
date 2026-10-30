@@ -225,6 +225,12 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .ranges{display:grid;gap:10px}
 .ranges[hidden]{display:none}
 .ranges .rngctl{justify-content:flex-start}
+.ranges .anybtn{order:9;margin-left:auto;padding:6px 14px;width:auto}
+.anyrng{display:grid;gap:10px}.anyrng[hidden],.rnglist[hidden],.rnghint[hidden]{display:none}
+.anyhead{display:flex;align-items:center;gap:12px}
+.anyhead input{flex:1;accent-color:var(--orange)}
+.anyhead output{font:600 14px var(--f-mono);min-width:112px;text-align:right;color:var(--ink)}
+#any-grid .grid div{transition:background .12s}
 .rnghide{display:none!important}
 .rnghint{margin:0;font-size:13px;color:var(--muted)}
 .rnglist{display:grid;border-top:1px solid var(--line)}
@@ -328,11 +334,16 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 
   <section class="ranges" id="ranges" hidden>
     <div class="controls rngctl">
+      <button type="button" class="rngtab anybtn" id="rng-any" aria-pressed="false">Any range</button>
       <label class="sizesel" for="rng-n"><select id="rng-n" aria-label="Стол"><option value="6">6-max</option><option value="7">7-max</option><option value="8">8-max</option><option value="9" selected>9-max</option><option value="10">10-max</option></select></label>
       <label class="sizesel" for="rng-act"><select id="rng-act" aria-label="Действие"><option value="open" selected>Open</option><option value="3bbcall" disabled>3bb call</option><option value="3bb3bet" disabled>3bb 3bet</option></select></label>
     </div>
-    <p class="rnghint">GTO-диапазоны опена первым в банк, стеки 100 ББ. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.</p>
+    <p class="rnghint" id="rng-hint">GTO-диапазоны опена первым в банк, стеки 100 ББ. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.</p>
     <div class="rnglist" id="rng-list"></div>
+    <div class="anyrng" id="anyrng" hidden>
+      <div class="anyhead"><input type="range" id="any-sl" min="0" max="100" step="0.5" value="15" aria-label="Процент лучших рук"><output id="any-out"></output></div>
+      <div id="any-grid"></div>
+    </div>
   </section>
 
   <div class="controls">
@@ -1906,6 +1917,25 @@ function renderRanges(){ const box=$('#rng-list'); box.innerHTML='';
     box.append(b,det); } }
 $('#rng-n').onchange=$('#rng-act').onchange=renderRanges; // смена параметров сворачивает все строки
 $('#m-rng').onclick=()=>showRanges(true);
+// ---- Any range: любой процент лучших рук. Порядок — эквити руки против случайной руки (как в PokerStove) ----
+const ANY_ORD='AA KK QQ JJ TT 99 88 AKs 77 AQs AKo AJs AQo ATs 66 AJo KQs KJs ATo A9s KTs KQo A8s 55 A7s A9o KJo QJs K9s KTo A8o QTs A6s A5s A4s A7o QJo K8s A3s 44 JTs K9o Q9s QTo A6o A5o K7s A2s A4o K6s K8o Q8s J9s K5s A3o JTo Q9o K7o 33 A2o K4s T9s Q7s J8s K6o K3s Q6s Q8o J9o K2s K5o Q5s T8s J7s K4o Q4s Q7o T9o J8o 22 K3o Q6o Q3s 98s T7s J6s K2o Q5o Q2s T8o J5s J7o 97s Q4o T6s J4s J3s 98o T7o Q3o 87s J6o 96s J2s Q2o J5o T5s T4s 97o 86s T6o J4o 95s T3s 76s J3o 87o T2s 85s 96o J2o T5o 94s 75s T4o 93s 86o 65s 84s 95o 92s T3o 76o 74s T2o 54s 85o 64s 83s 94o 75o 82s 73s 93o 65o 53s 63s 84o 92o 43s 74o 54o 72s 64o 52s 62s 83o 82o 42s 73o 53o 32s 63o 43o 72o 52o 62o 42o 32o'.split(' ');
+let ANYV=false, ANYCELL=null;
+function anyGrid(){ const g=document.createElement('div'); g.className='grid'; ANYCELL={};
+  for(let i=0;i<13;i++) for(let j=0;j<13;j++){ const hh=i===j?RANKS[i]+RANKS[j]:i<j?RANKS[i]+RANKS[j]+'s':RANKS[j]+RANKS[i]+'o';
+    const e=document.createElement('div'); e.textContent=hh.slice(0,2); e.title=hh; ANYCELL[hh]=e; g.appendChild(e); }
+  const w=document.createElement('div'); w.className='gridwrap'; w.appendChild(g); $('#any-grid').replaceChildren(w); }
+function anyUpd(){ const pct=+$('#any-sl').value, need=pct/100*1326; let got=0;
+  for(const hh of ANY_ORD){ const n=combos(hh), part=Math.max(0,Math.min(1,(need-got)/n)), e=ANYCELL[hh]; got+=n;
+    const q=Math.round(part*100);
+    e.style.background=q>=100?'var(--raise)':q<=0?'':`linear-gradient(to top,var(--raise) ${q}%,var(--fold) ${q}%)`;
+    e.style.color=q>=60?'#fff':''; }
+  $('#any-out').textContent=`${String(pct).replace('.',',')}% · ${Math.round(need)} комбо`; }
+function anyMode(on){ ANYV=on; $('#rng-any').setAttribute('aria-pressed',on); $('#anyrng').hidden=!on;
+  for(const id of ['rng-list','rng-hint']) $('#'+id).hidden=on;
+  if(on){ if(!ANYCELL) anyGrid(); anyUpd(); } }
+$('#rng-any').onclick=()=>anyMode(!ANYV);
+$('#any-sl').oninput=anyUpd;
+for(const id of ['rng-n','rng-act']) $('#'+id).addEventListener('change',()=>anyMode(false));
 setMode('gto'); // по умолчанию всегда GTO
 setGame('prof');
 renderFilters(); updScore(); renderStats(); idle();
