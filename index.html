@@ -898,7 +898,7 @@ function renderEnd(){
 
 // ===================== stats / filters =====================
 function updScore(){ $('#score').innerHTML='<button class="helpbtn" id="profbtn" type="button">Профиль</button>'; // шапка одинаковая на всех вкладках
-  $('#sessline').innerHTML= REC ? (RUN?`${esc(RUN.name)} · раздача <b>${Math.min(PROF_N,RUN.hands.length+(H&&!H.over&&!IDLE?1:0))}/${PROF_N}</b>`:'') : `Сессия <b>${session.pts}/${session.n*2}</b> · серия <b>${session.streak}</b>`; }
+  $('#sessline').innerHTML= REC ? (RUN?`${esc(RUN.name)} · раздача <b>${Math.min(PROF_N,RUN.hands.length+(H&&!H.over&&!IDLE?1:0))}/${PROF_N}</b>`:'') : `Сессия <b>${String(session.pts/2).replace('.',',')}/${session.n}</b> · серия <b>${session.streak}</b>`; }
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 const FILTERS={all:'Все позиции',EP:'Ранние',MP:'Средние',LP:'Поздние',BL:'Блайнды'};
 function renderFilters(){
