@@ -114,6 +114,8 @@ function logout_(x) {
 // ---------- сессии ----------
 function saveSession_(x) {
   if (!x || !x.id) return { ok: false, error: 'no id' };
+  // пока записываем только завершённые тесты «Профиля»
+  if ((x.summary && x.summary.hands || (x.dec || []).length) < PROF_N) return { ok: false, error: 'unfinished' };
   const a = auth_(x.token);
   const s = x.summary || {}, dec = x.dec || [];
   const hands = s.hands || dec.length;

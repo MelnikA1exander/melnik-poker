@@ -247,7 +247,14 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .authcard input{font:500 16px var(--f-body);padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sunk);color:var(--ink);width:100%}
 .authbtn{font:700 16px var(--f-body);border:0;border-radius:12px;padding:13px;cursor:pointer;width:100%}
 .authbtn.primary{background:var(--raise);color:#fff}
-.authbtn.secondary{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.authbtn.secondary{background:#fff;color:#13201A;border:1px solid var(--line)}
+.pname{font:700 22px/1.2 var(--f-display);margin:0;overflow-wrap:anywhere}
+.pcards{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.pcards div{background:var(--sunk);border-radius:12px;padding:10px 12px;display:grid;gap:2px}
+.pcards div.wide{grid-column:1/-1}
+.pcards b{font:700 20px var(--f-mono);font-variant-numeric:tabular-nums}
+.pcards div.wide b{font:700 18px/1.25 var(--f-body)}
+.pcards span{font-size:12px;color:var(--muted)}
 .authbtn:disabled{opacity:.45;cursor:default}
 .autherr{margin:0;font-size:13px;color:var(--bad);min-height:0}
 .autherr:empty{display:none}
@@ -262,8 +269,8 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
     <label>Логин<input id="alogin" autocomplete="username" maxlength="24" autocapitalize="off" spellcheck="false"></label>
     <label>Пароль<input id="apass" type="password" autocomplete="current-password" maxlength="100"></label>
     <p class="autherr" id="autherr" role="alert"></p>
-    <button class="authbtn primary" id="abtn-login" type="submit" disabled>Вход</button>
-    <button class="authbtn secondary" id="abtn-reg" type="button">Регистрация</button>
+    <button class="authbtn secondary" id="abtn-login" type="submit" disabled>Вход</button>
+    <button class="authbtn primary" id="abtn-reg" type="button">Регистрация</button>
     <button class="linkbtn authback" id="abtn-back" type="button" hidden>У меня уже есть аккаунт</button>
   </form>
 </section>
@@ -1768,22 +1775,25 @@ let PPER='last100';
 function openProfile(){
   const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
   const card=document.createElement('div'); card.className='sheetcard'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
-  card.innerHTML='<div class="sheethead"><div><div class="decn">Профиль</div><div class="ctx"></div></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><div class="seg" id="pper"><button type="button" data-p="last100">Последние 100 раздач</button><button type="button" data-p="all">Всё время</button></div><div class="pbody"><p class="hint">Загружаю…</p></div>';
-  card.querySelector('.ctx').textContent=AUTH?AUTH.login:'';
+  card.innerHTML='<div class="sheethead"><div><div class="ctx">Профиль игрока</div><p class="pname"></p></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><div class="seg" id="pper"><button type="button" data-p="last100">Последние 100 раздач</button><button type="button" data-p="all">Всё время</button></div><div class="pcards"></div><p class="hint" id="pnote"></p>';
+  card.querySelector('.pname').textContent=AUTH?AUTH.login:'';
   ov.appendChild(card); document.body.appendChild(ov);
   const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); }; card.querySelector('#sheet-close').onclick=close;
-  const body=card.querySelector('.pbody'), pct=v=>v==null?'—':v+'%'; let R=null;
+  const cards=card.querySelector('.pcards'), note=card.querySelector('#pnote'); let R=null, st='load';
+  const ZERO={sessions:0,hands:0,gto:0,acc:0,vpip:0,pfr:0,type:''};
   const draw=()=>{ for(const b of card.querySelectorAll('#pper button')) b.setAttribute('aria-pressed',b.dataset.p===PPER);
-    if(!R) return; const T=R[PPER];
-    if(!T||!T.sessions){ body.innerHTML='<p>Пока нет завершённых тестов. Сыграй «Профиль» до конца, и здесь появится твоя статистика.</p>'; return; }
-    body.innerHTML=`<div class="res"><div><p class="ptype"></p><p class="psub"></p></div><div class="pstats"><div><b>${pct(T.gto)}</b><span>GTO</span></div><div><b>${pct(T.acc)}</b><span>правильных решений</span></div><div><b>${pct(T.vpip)}</b><span>VPIP</span></div><div><b>${pct(T.pfr)}</b><span>PFR</span></div></div></div>`;
-    body.querySelector('.ptype').textContent=T.type||'—';
-    body.querySelector('.psub').textContent=`Тип игрока · ${T.hands} раздач, тестов: ${T.sessions}`; };
+    const T=Object.assign({},ZERO,R&&R[PPER]||{}), v=x=>(x==null?0:x)+'%';
+    cards.innerHTML='<div class="wide"><b></b><span>тип игрока</span></div>'
+      +`<div><b>${v(T.gto)}</b><span>GTO</span></div><div><b>${v(T.acc)}</b><span>правильных решений</span></div>`
+      +`<div><b>${v(T.vpip)}</b><span>VPIP</span></div><div><b>${v(T.pfr)}</b><span>PFR</span></div>`
+      +`<div><b>${T.hands}</b><span>раздач</span></div><div><b>${T.sessions}</b><span>тестов</span></div>`;
+    cards.querySelector('.wide b').textContent=T.type||'Пока не определён';
+    note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.sessions?'Учитываются только завершённые тесты «Профиля».':'Пока нет завершённых тестов. Пройди «Профиль» до конца, и здесь появится статистика.'; };
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{
     if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); $('#logout').onclick(); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
-    R=r; draw(); }).catch(()=>{ body.innerHTML='<p>Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.</p>'; });
+    R=r; st='ok'; draw(); }).catch(()=>{ st='err'; draw(); });
 }
 $('#score').onclick=e=>{ if(e.target.id==='profbtn') openProfile(); };
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
