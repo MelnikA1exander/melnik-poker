@@ -244,6 +244,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .grid .R{background:var(--raise);color:#fff}.grid .C{background:var(--call);color:#fff}
 .grid .RC{background:linear-gradient(135deg,var(--raise) 50%,var(--call) 50%);color:#fff}
 .grid .RF{background:linear-gradient(135deg,var(--raise) 50%,var(--fold) 50%);color:var(--ink)}
+.grid .RFq{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;color:var(--ink);gap:1px}
+.grid .RFq small{font:600 8px var(--f-mono)}
 .grid .CF{background:linear-gradient(135deg,var(--call) 50%,var(--fold) 50%);color:var(--ink)}
 .grid .me{outline:3px solid var(--ink);outline-offset:-1px;z-index:1}
 .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)}
@@ -325,10 +327,10 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 
   <section class="ranges" id="ranges" hidden>
     <div class="controls">
-      <label class="sizesel" for="rng-n">Стол <select id="rng-n"><option value="6" disabled>6-max</option><option value="7" disabled>7-max</option><option value="8" disabled>8-max</option><option value="9" selected>9-max</option><option value="10" disabled>10-max</option></select></label>
+      <label class="sizesel" for="rng-n">Стол <select id="rng-n"><option value="6">6-max</option><option value="7">7-max</option><option value="8">8-max</option><option value="9" selected>9-max</option><option value="10">10-max</option></select></label>
       <label class="sizesel" for="rng-act">Действие <select id="rng-act"><option value="open" selected>Open</option><option value="3bbcall" disabled>3bb call</option><option value="3bb3bet" disabled>3bb 3bet</option></select></label>
     </div>
-    <p class="rnghint">GTO-диапазоны опена первым в банк. Разверни позицию, чтобы увидеть таблицу рук.</p>
+    <p class="rnghint">GTO-диапазоны опена первым в банк, стеки 100 ББ. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.</p>
     <div class="rnglist" id="rng-list"></div>
   </section>
 
@@ -377,17 +379,24 @@ function chart(o){ return {R:R(o.R),C:R(o.C),RC:R(o.RC),RF:R(o.RF),CF:R(o.CF)}; 
 function cls(ch,h){ for(const k of ['RC','RF','CF']) if(ch[k].has(h)) return k; if(ch.R.has(h)) return 'R'; if(ch.C.has(h)) return 'C'; return 'F'; }
 const combos=h=>h.length===2?6:(h[2]==='s'?4:12);
 
-// Опен первым в банк. Ключ — расстояние до баттона (0 = BTN). SB отдельно.
-const RFI={
-  6:chart({R:'55+, A8s+, A5s-A4s, KTs+, QTs+, JTs, T9s, AJo+, KQo', RF:'44, A7s, A3s, K9s, Q9s, 98s, ATo, KJo'}),
-  5:chart({R:'44+, A7s+, A5s-A3s, K9s+, Q9s+, J9s+, T9s, 98s, AJo+, KQo', RF:'33, A6s, A2s, 87s, ATo, KJo'}),
-  4:chart({R:'33+, A2s+, K9s+, Q9s+, J9s+, T9s, 98s, 87s, ATo+, KJo+', RF:'22, K8s, T8s, 76s, A9o, QJo'}),
-  3:chart({R:'22+, A2s+, K8s+, Q9s+, J9s+, T8s+, 97s+, 87s, 76s, ATo+, KJo+, QJo', RF:'K7s, Q8s, 65s, A9o, KTo'}),
-  2:chart({R:'22+, A2s+, K6s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 75s+, 65s, A9o+, KTo+, QTo+, JTo', RF:'K5s, Q7s, J7s, 54s, A8o, K9o'}),
-  1:chart({R:'22+, A2s+, K3s+, Q6s+, J7s+, T7s+, 96s+, 85s+, 75s+, 64s+, 54s, A7o+, A5o, K9o+, Q9o+, J9o+, T9o', RF:'K2s, Q5s, J6s, 74s, 53s, A6o, A4o, K8o, 98o'}),
-  0:chart({R:'22+, A2s+, K2s+, Q2s+, J4s+, T6s+, 95s+, 84s+, 74s+, 63s+, 53s+, 43s, A2o+, K7o+, Q8o+, J8o+, T8o+, 97o+, 87o', RF:'J2s, T5s, 94s, 73s, 52s, 42s, K6o, K5o, Q7o, J7o, T7o, 86o, 76o'}),
-  SB:chart({R:'22+, A2s+, K2s+, Q4s+, J6s+, T6s+, 96s+, 85s+, 75s+, 64s+, 54s, A2o+, K8o+, Q9o+, J9o+, T9o', RF:'Q3s, Q2s, J5s, T5s, 95s, 84s, 74s, 63s, 53s, K7o, K6o, Q8o, J8o, T8o, 98o'}),
+// Опен первым в банк. Ключ — расстояние до баттона (0 = BTN, 7 = UTG за 10-max), SB отдельно.
+// Частоты рейза в процентах. Порядок рук и миксы на границе — по солверным чартам 100 ББ (GTO Wizard / Pokalab / GTO Gecko),
+// ширина каждой позиции — по числу игроков позади: BTN 43.6%, CO 29.1%, HJ 22.3%, LJ 17.6% (солвер Pokalab, 6-max), дальше к UTG 10-max ≈10%.
+const RFIF={
+  7:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:45 A5s:100 A4s:45 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 AQo:100 KQo:95 QQ:100 QJs:100 QTs:45 AJo:95 JJ:100 JTs:45 TT:100 99:100 88:100 77:50 66:20',
+  6:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:85 A5s:100 A4s:85 A3s:10 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:10 AQo:100 KQo:100 QQ:100 QJs:100 QTs:85 AJo:100 KJo:5 JJ:100 JTs:85 ATo:5 TT:100 T9s:10 99:100 88:100 77:90 66:65 55:5',
+  5:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:100 A5s:100 A4s:100 A3s:45 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:45 AQo:100 KQo:100 QQ:100 QJs:100 QTs:100 AJo:100 KJo:40 JJ:100 JTs:100 ATo:40 TT:100 T9s:45 99:100 88:100 77:100 66:95 55:25',
+  4:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:100 A8s:25 A5s:100 A4s:100 A3s:90 A2s:25 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:90 AQo:100 KQo:100 QQ:100 QJs:100 QTs:100 Q9s:25 AJo:100 KJo:90 JJ:100 JTs:100 J9s:25 ATo:90 TT:100 T9s:90 99:100 88:100 77:100 66:100 55:80 44:10',
+  3:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:100 A8s:95 A7s:60 A6s:5 A5s:100 A4s:100 A3s:100 A2s:95 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:100 K8s:5 AQo:100 KQo:100 QQ:100 QJs:100 QTs:100 Q9s:95 AJo:100 KJo:100 QJo:55 JJ:100 JTs:100 J9s:95 ATo:100 KTo:5 TT:100 T9s:100 T8s:5 99:100 98s:60 88:100 87s:5 77:100 66:100 55:100 44:95 33:40 22:5',
+  2:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:100 A8s:100 A7s:100 A6s:95 A5s:100 A4s:100 A3s:100 A2s:100 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:100 K8s:95 K7s:75 AQo:100 KQo:100 QQ:100 QJs:100 QTs:100 Q9s:100 Q8s:75 AJo:100 KJo:100 QJo:100 JJ:100 JTs:100 J9s:100 J8s:10 ATo:100 KTo:95 QTo:5 TT:100 T9s:100 T8s:95 A9o:70 99:100 98s:100 97s:10 88:100 87s:95 77:100 76s:75 66:100 65s:10 55:100 44:100 33:100 22:95',
+  1:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:100 A8s:100 A7s:100 A6s:100 A5s:100 A4s:100 A3s:100 A2s:100 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:100 K8s:100 K7s:100 K6s:95 K5s:80 K4s:30 AQo:100 KQo:100 QQ:100 QJs:100 QTs:100 Q9s:100 Q8s:100 Q7s:80 Q6s:5 AJo:100 KJo:100 QJo:100 JJ:100 JTs:100 J9s:100 J8s:100 J7s:5 ATo:100 KTo:100 QTo:100 JTo:95 TT:100 T9s:100 T8s:100 T7s:30 A9o:100 K9o:25 99:100 98s:100 97s:100 A8o:95 88:100 87s:100 86s:95 A7o:55 77:100 76s:100 75s:80 A6o:5 66:100 65s:100 64s:5 A5o:25 55:100 54s:80 44:100 33:100 22:100',
+  0:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:100 A8s:100 A7s:100 A6s:100 A5s:100 A4s:100 A3s:100 A2s:100 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:100 K8s:100 K7s:100 K6s:100 K5s:100 K4s:100 K3s:100 K2s:100 AQo:100 KQo:100 QQ:100 QJs:100 QTs:100 Q9s:100 Q8s:100 Q7s:100 Q6s:100 Q5s:100 Q4s:85 Q3s:20 AJo:100 KJo:100 QJo:100 JJ:100 JTs:100 J9s:100 J8s:100 J7s:100 J6s:55 J5s:20 ATo:100 KTo:100 QTo:100 JTo:100 TT:100 T9s:100 T8s:100 T7s:100 T6s:95 A9o:100 K9o:100 Q9o:100 J9o:100 T9o:100 99:100 98s:100 97s:100 96s:100 95s:20 A8o:100 K8o:95 Q8o:15 J8o:5 T8o:5 98o:5 88:100 87s:100 86s:100 85s:95 A7o:100 K7o:50 77:100 76s:100 75s:100 74s:85 A6o:100 K6o:5 66:100 65s:100 64s:100 63s:55 A5o:100 55:100 54s:100 53s:100 A4o:100 44:100 43s:55 A3o:100 33:100 A2o:100 22:100',
+  SB:'AA:100 AKs:100 AQs:100 AJs:100 ATs:100 A9s:100 A8s:100 A7s:100 A6s:100 A5s:100 A4s:100 A3s:100 A2s:100 AKo:100 KK:100 KQs:100 KJs:100 KTs:100 K9s:100 K8s:100 K7s:100 K6s:100 K5s:100 K4s:100 K3s:100 K2s:100 AQo:100 KQo:100 QQ:100 QJs:100 QTs:100 Q9s:100 Q8s:100 Q7s:100 Q6s:100 Q5s:100 Q4s:85 Q3s:15 AJo:100 KJo:100 QJo:100 JJ:100 JTs:100 J9s:100 J8s:100 J7s:100 J6s:50 J5s:15 ATo:100 KTo:100 QTo:100 JTo:100 TT:100 T9s:100 T8s:100 T7s:100 T6s:95 A9o:100 K9o:100 Q9o:100 J9o:100 T9o:100 99:100 98s:100 97s:100 96s:100 95s:15 A8o:100 K8o:95 Q8o:15 J8o:5 T8o:5 98o:5 88:100 87s:100 86s:100 85s:95 A7o:100 K7o:50 77:100 76s:100 75s:100 74s:85 A6o:100 K6o:5 66:100 65s:100 64s:100 63s:50 A5o:100 55:100 54s:100 53s:100 A4o:100 44:100 43s:50 A3o:100 33:100 A2o:100 22:100',
 };
+function chartF(str){ const f={}, R=new Set(), RF=new Set(), E=new Set();
+  for(const t of str.split(' ')){ const [hh,v]=t.split(':'); f[hh]=+v/100; (+v>=95?R:RF).add(hh); }
+  return {R,C:E,RC:E,RF,CF:E,f}; }
+const RFI={}; for(const k in RFIF) RFI[k]=chartF(RFIF[k]);
 // Против опена: группа опенера (EP/MP/LP/SB) × место героя (IP/SB/BB). R = 3-бет.
 const VSOPEN={
   'EP-IP':chart({R:'QQ+, AKs, AKo', C:'JJ-66, AQs-ATs, KQs, KJs, QJs, JTs, T9s, AQo', RC:'JJ, AQs', RF:'A5s, A4s', CF:'55, 44, KTs, 98s, AJo, KQo'}),
@@ -420,7 +429,7 @@ const lab=i=>LABELS[N][i];
 const btnIdx=()=>N-3;
 const dist=i=>btnIdx()-i; // 0 = BTN; для блайндов отрицательное
 const isSB=i=>i===N-2, isBB=i=>i===N-1;
-const rfiKey=i=>isSB(i)?'SB':Math.min(6,dist(i));
+const rfiKey=i=>isSB(i)?'SB':Math.min(7,dist(i));
 const grp=i=>isSB(i)?'SB':(dist(i)>=4?'EP':dist(i)>=2?'MP':'LP');
 const grpName={EP:'ранней позиции',MP:'средней позиции',LP:'поздней позиции',SB:'малого блайнда'};
 
@@ -570,8 +579,9 @@ function openRange(p){
 function plusBtn(p){ const b=document.createElement('button'); b.className='plus'; b.id='plus-'+p; b.type='button'; b.textContent='+'; b.setAttribute('aria-label','Показать диапазон'); b.onclick=e=>{ e.stopPropagation(); openRange(p); }; return b; }
 function botAct(h,p){
   if(MODE==='ind'){ indBotAct(h,p); return; }
-  const d=decisionFor(h,p), c=cls(d.ch,h.players[p].h);
-  const al=[...allowedFor(d,c)]; const a=al[rnd(al.length)];
+  const d=decisionFor(h,p), hh=h.players[p].h, c=cls(d.ch,hh);
+  const al=[...allowedFor(d,c)]; let a=al[rnd(al.length)];
+  if(c==='RF'&&d.ch.f&&d.ch.f[hh]!=null&&al.includes('R')&&al.includes('F')) a=Math.random()<d.ch.f[hh]?'R':'F'; // микс по частоте солвера
   apply(h,p,a,a==='R'?botSize(d):0);
 }
 function checkOver(h){
@@ -853,7 +863,7 @@ function gtoText(x){
   const d=x.d, words=x.al.map(a=>a==='R'?`${RAISE_NAME[d.kind]} ${sizeBands(d).txt}`:actWord(a,d));
   return (words.length>1?'Микс: ':'')+cap(words.join(' или '));
 }
-function rangePct(ch,keys){ let n=0; const all=new Set(); for(const k of keys) for(const hh of ch[k]) all.add(hh); for(const hh of all) n+=combos(hh); return Math.round(n/1326*100); }
+function rangePct(ch,keys){ if(ch.f&&keys.every(k=>k==='R'||k==='RF')){ let n=0; for(const hh in ch.f) n+=combos(hh)*ch.f[hh]; return Math.round(n/1326*100); } let n=0; const all=new Set(); for(const k of keys) for(const hh of ch[k]) all.add(hh); for(const hh of all) n+=combos(hh); return Math.round(n/1326*100); }
 function explain(x){
   const d=x.d, c=x.c, hh=prettyHand(x.h);
   if(d.kind==='iso'){ const ck=isBB(d.p)?'чек':'долив'; return ({R:`${hh} — изоляция рейзом.`,C:`${hh} — ${ck}.`,CF:`${hh} — пограничная: ${ck} или ${isBB(d.p)?'чек':'фолд'}.`,F:`${hh} — ${isBB(d.p)?'чек':'фолд'}.`}[c]||hh)+' '+d.indNote; }
@@ -886,11 +896,14 @@ function gridEl(x){
   for(let i=0;i<13;i++) for(let j=0;j<13;j++){
     const hh=i===j?RANKS[i]+RANKS[j]:i<j?RANKS[i]+RANKS[j]+'s':RANKS[j]+RANKS[i]+'o';
     const e=document.createElement('div'); const cc=cls(d.ch,hh); if(cc!=='F') e.className=cc; if(hh===x.h) e.classList.add('me');
-    e.textContent=hh.slice(0,2); e.title=hh; grid.appendChild(e);
+    e.textContent=hh.slice(0,2); e.title=hh;
+    const fq=d.ch.f&&cc==='RF'?d.ch.f[hh]:null;
+    if(fq!=null){ const pc=Math.round(fq*100); e.className='RFq'+(hh===x.h?' me':''); e.style.background=`linear-gradient(to top,var(--raise) ${pc}%,var(--fold) ${pc}%)`; e.title=`${hh}: рейз ${pc}%`; const sm=document.createElement('small'); sm.textContent=pc+'%'; e.appendChild(sm); }
+    grid.appendChild(e);
   }
   gw.appendChild(grid);
   const lg=document.createElement('div'); lg.className='legend';
-  lg.innerHTML=`<span><i style="background:var(--raise)"></i>${RAISE_NAME[d.kind]}</span>${['open','bbiso'].includes(d.kind)?'':'<span><i style="background:var(--call)"></i>колл</span>'}<span><i style="background:linear-gradient(135deg,var(--raise) 50%,var(--fold) 50%)"></i>микс</span><span><i style="background:var(--fold);border:1px solid var(--line)"></i>${d.kind==='bbiso'?'чек':'фолд'}</span><span>Над диагональю одномастные</span>`;
+  lg.innerHTML=`<span><i style="background:var(--raise)"></i>${RAISE_NAME[d.kind]}</span>${['open','bbiso'].includes(d.kind)?'':'<span><i style="background:var(--call)"></i>колл</span>'}<span><i style="background:linear-gradient(135deg,var(--raise) 50%,var(--fold) 50%)"></i>${d.ch.f?'микс, % — частота рейза':'микс'}</span><span><i style="background:var(--fold);border:1px solid var(--line)"></i>${d.kind==='bbiso'?'чек':'фолд'}</span><span>Над диагональю одномастные</span>`;
   const w=document.createElement('div'); w.className='gridblock'; w.append(gw,lg); return w;
 }
 function decBlock(x,i){
@@ -1877,11 +1890,12 @@ function showRanges(on){ RNGV=on; $('#ranges').hidden=!on;
   $('#m-rng').setAttribute('aria-pressed',on);
   if(on){ for(const id of ['m-prof','m-pre','m-hand']) $('#'+id).setAttribute('aria-pressed',false); renderRanges(); }
   else { $('#m-prof').setAttribute('aria-pressed',GAME==='prof'); $('#m-pre').setAttribute('aria-pressed',GAME==='pre'); $('#m-hand').setAttribute('aria-pressed',GAME==='hand'); } }
-function rngCharts(n,act){ // [{pos, ch}] по местам за столом; пока только опен
-  const L=LABELS[n], out=[];
-  for(let i=0;i<n-1;i++) out.push({pos:L[i],ch:i===n-2?RFI.SB:RFI[Math.min(6,(n-3)-i)]});
+const RNG_LABELS={6:['UTG','HJ','CO','BTN','SB','BB'],7:['UTG','LJ','HJ','CO','BTN','SB','BB'],8:LABELS[8],9:LABELS[9],10:LABELS[10]};
+function rngCharts(n,act){ // [{pos, ch}] по местам за столом; пока только опен. Ключ чарта — сколько мест до баттона
+  const L=RNG_LABELS[n], out=[];
+  for(let i=0;i<n-1;i++) out.push({pos:L[i],ch:i===n-2?RFI.SB:RFI[Math.min(7,(n-3)-i)]});
   return out; }
-function rngPct(ch){ let c=0; for(const hh of ALL169){ const k=cls(ch,hh); c+=combos(hh)*(k==='R'?1:k==='F'?0:.5); } return Math.round(c/1326*100); }
+function rngPct(ch){ return rangePct(ch,['R','RF']); }
 function renderRanges(){ const box=$('#rng-list'); box.innerHTML='';
   for(const {pos,ch} of rngCharts(+$('#rng-n').value,$('#rng-act').value)){
     const b=document.createElement('button'); b.type='button'; b.className='rrow'; b.setAttribute('aria-expanded','false');
