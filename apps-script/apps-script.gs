@@ -1,5 +1,6 @@
 // Бэкенд тренажёра Melnik Poker на Google Таблице.
-// Листы создаются сами: «Сессии» (результаты), «Раздачи профиля» (каждое решение тестов отдельной строкой, по времени), «Аккаунты» (логин, соль, хеш пароля), «Входы» (ключи входа).
+// Листы создаются сами: «Сессии» (результаты), «Раздачи профиля» (каждое решение тестов отдельной строкой, по времени), «Аккаунты» (логин, соль, хеш пароля), «Входы» (ключи входа),
+// «Последние 300» (по каждому аккаунту его последние 300 префлоп-решений из «Профиля» и «Префлопа»).
 // Все запросы — POST с JSON в теле (Content-Type: text/plain). Поле action выбирает действие:
 //   register {login, password}       → {ok, token, login}
 //   login    {login, password}       → {ok, token, login}
@@ -8,14 +9,18 @@
 //   stats    {token}                 → {ok, login, all, last100} — {sessions, hands, gto, acc, vpip, pfr, type}
 //   preflop  {token, id, started, dec} → {ok} — личный журнал режима «Префлоп», лист «Префлоп».
 //            Наружу не отдаётся никаким действием и в stats не входит; смотреть только в самой таблице.
+//   history  {token}                 → {ok, dec} — последние ≤300 префлоп-решений игрока (тесты «Профиля» + журнал «Префлопа»)
+//            из листа «Последние 300»; тренажёр берёт их как стартовую точку для оценки профиля.
 //   без action — результат сессии {id, name, started, updated, summary, dec, token?};
 //   повторная отправка той же сессии (тот же id) обновляет её строку.
 
-const SHEET = 'Сессии', ACC = 'Аккаунты', TOK = 'Входы', PF = 'Префлоп', HANDS = 'Раздачи профиля';
+const SHEET = 'Сессии', ACC = 'Аккаунты', TOK = 'Входы', PF = 'Префлоп', HANDS = 'Раздачи профиля', RECENT = 'Последние 300';
 const HEAD = ['Получено', 'ID', 'Имя', 'Начало', 'Раздач', 'Тип', 'VPIP', 'PFR', 'Лимпы', 'Точность', 'Итог (JSON)', 'Решения (JSON)', 'Аккаунт'];
 const ACC_HEAD = ['Логин', 'Ключ', 'Соль', 'Хеш', 'Создан', 'Последний вход'];
 const PF_HEAD = ['Получено', 'ID', 'Аккаунт', 'Начало', 'Решений', 'Верно %', 'Неверных', 'Решения (JSON)'];
 const HANDS_HEAD = ['Время', 'Аккаунт', 'Тест (ID)', 'Раздача №', 'Позиция', 'Рука', 'Карты', 'Ситуация', 'К коллу', 'Действие', 'Сумма', 'Правильно', 'Оценка', 'Что было до тебя'];
+const RECENT_HEAD = ['Время', 'Аккаунт', 'Источник', 'Тест / серия', 'Позиция', 'Рука', 'Карты', 'Ситуация', 'К коллу', 'Действие', 'Сумма', 'Правильно', 'Оценка', 'Данные (JSON)'];
+const RECENT_N = 300;
 const TOK_HEAD = ['Ключ входа', 'Аккаунт', 'Создан', 'Действует до'];
 const TOKEN_DAYS = 90, HASH_ROUNDS = 2000, PROF_N = 50;
 
@@ -40,6 +45,7 @@ function doPost(e) {
       case 'logout': return out_(logout_(x));
       case 'stats': return out_(stats_(x));
       case 'preflop': return out_(savePreflop_(x));
+      case 'history': return out_(history_(x));
       default: return out_(saveSession_(x));
     }
   } catch (err) {
@@ -49,7 +55,7 @@ function doPost(e) {
   }
 }
 
-function doGet() { sh_(SHEET, HEAD); sh_(HANDS, HANDS_HEAD); sh_(PF, PF_HEAD); sh_(ACC, ACC_HEAD); sh_(TOK, TOK_HEAD); return out_({ ok: true, sheet: SHEET }); }
+function doGet() { sh_(SHEET, HEAD); sh_(HANDS, HANDS_HEAD); sh_(PF, PF_HEAD); sh_(RECENT, RECENT_HEAD); sh_(ACC, ACC_HEAD); sh_(TOK, TOK_HEAD); return out_({ ok: true, sheet: SHEET }); }
 
 function out_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
@@ -141,6 +147,7 @@ function saveSession_(x) {
   const at = ids.indexOf(String(x.id));
   if (at > 0) sh.getRange(at + 1, 1, 1, row.length).setValues([row]);
   else { sh.appendRow(row); addHands_(String(x.id), a ? a.login : String(x.name || ''), dec); }
+  if (a) updRecent_(a, String(x.id), 'Профиль', dec);
   return { ok: true };
 }
 
@@ -205,7 +212,68 @@ function savePreflop_(x) {
     if (String(sh.getRange(at + 1, 3).getValue()) !== a.login) return { ok: false, error: 'owner' };
     sh.getRange(at + 1, 1, 1, row.length).setValues([row]);
   } else sh.appendRow(row);
+  updRecent_(a, String(x.id), 'Префлоп', dec);
   return { ok: true };
+}
+
+// ---------- последние 300 решений игрока ----------
+// Строка на решение; в последнем столбце — данные для тренажёра (позиция, рука, ситуация, действие, размер, правильные действия).
+function recentRow_(login, src, id, d) {
+  const g = d.gr != null ? d.gr : d.g;
+  const data = { t: d.t || 0, src, pos: d.pos || '', h: d.h || '', k: d.k || '', a: d.a || '', amt: d.amt || 0,
+    ok: Array.isArray(d.ok) ? d.ok : [], toCall: d.toCall || 0, open: d.open || null, lim: d.lim || 0, cur: d.cur || null, N: d.N || 9 };
+  return [d.t ? new Date(d.t) : '', login, src, id, d.pos || '', d.h || '', d.c || '', SIT_[d.k] || d.k || '', d.toCall || 0, actName_(d.a, d),
+    d.a === 'R' ? d.amt || '' : '', Array.isArray(d.ok) ? d.ok.map(a => actName_(a, d)).join(' / ') : '',
+    g === 2 ? 'верно' : g === 1 ? 'неточный размер' : g === 0 ? 'ошибка' : '', JSON.stringify(data)];
+}
+const recentDec_ = d => d && d.h && d.k && d.a; // только префлоп-решения с рукой и ситуацией
+// все решения аккаунта из «Сессий» и «Префлопа»: [источник, id, решение]
+function allDec_(a) {
+  const out = [];
+  rows_(sh_(SHEET, HEAD)).forEach(r => {
+    if (String(r[12]) !== a.key || /^pf/.test(String(r[1]))) return;
+    let d = []; try { d = JSON.parse(r[11] || '[]'); } catch (e) { return; }
+    d.forEach(x => out.push(['Профиль', String(r[1]), x]));
+  });
+  rows_(sh_(PF, PF_HEAD)).forEach(r => {
+    if (key_(r[2]) !== a.key) return;
+    let d = []; try { d = JSON.parse(r[7] || '[]'); } catch (e) { return; }
+    d.forEach(x => out.push(['Префлоп', String(r[1]), x]));
+  });
+  return out;
+}
+// обновляет строки аккаунта: заменяет решения теста/серии id новыми и оставляет последние 300;
+// если строк аккаунта ещё нет — собирает их из всей истории
+function updRecent_(a, id, src, dec) {
+  const sh = sh_(RECENT, RECENT_HEAD), W = RECENT_HEAD.length, all = rows_(sh).map(r => r.slice(0, W));
+  const others = all.filter(r => key_(r[1]) !== a.key);
+  let mine = all.filter(r => key_(r[1]) === a.key);
+  if (!mine.length) mine = allDec_(a).filter(x => recentDec_(x[2])).map(x => recentRow_(a.login, x[0], x[1], x[2]));
+  else {
+    mine = mine.filter(r => String(r[3]) !== String(id));
+    (dec || []).filter(recentDec_).forEach(d => mine.push(recentRow_(a.login, src, String(id), d)));
+  }
+  const tm = r => r[0] ? new Date(r[0]).getTime() : 0;
+  mine.sort((p, q) => tm(p) - tm(q));
+  const out = others.concat(mine.slice(-RECENT_N));
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+  if (out.length) sh.getRange(2, 1, out.length, W).setValues(out);
+}
+function history_(x) {
+  const a = auth_(x.token);
+  if (!a) return { ok: false, error: 'auth' };
+  const mineRows = () => rows_(sh_(RECENT, RECENT_HEAD)).filter(r => key_(r[1]) === a.key);
+  let mine = mineRows();
+  if (!mine.length) { updRecent_(a, '', '', []); mine = mineRows(); }
+  const dec = [];
+  mine.forEach(r => { try { dec.push(JSON.parse(r[13])); } catch (e) {} });
+  return { ok: true, dec };
+}
+// Запусти один раз вручную (rebuildRecent → Выполнить): пересобирает «Последние 300» для всех аккаунтов из всей истории.
+function rebuildRecent() {
+  const sh = sh_(RECENT, RECENT_HEAD);
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+  rows_(sh_(ACC, ACC_HEAD)).forEach(r => updRecent_({ login: String(r[0]), key: String(r[1]) }, '', '', []));
 }
 
 // общая статистика игрока без конкретных раздач: за всё время и за последние 100 раздач

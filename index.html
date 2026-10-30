@@ -436,7 +436,7 @@ function heroSeat(){
   const c=[]; for(let i=0;i<N;i++) if(ok(i)) c.push(i); return c[rnd(c.length)];
 }
 function setupHand(){
-  const deck=shuffled(); const players=[];
+  const deck=SMAP?shuffled().map(c=>c[0]+SMAP[c[1]]):shuffled(); const players=[]; // SMAP: повтор раздачи с другими мастями
   for(let i=0;i<N;i++){ const cards=[deck.pop(),deck.pop()]; players.push({i,cards,h:hclass(cards),bet:0,folded:false,allin:false,tag:''}); }
   players[N-2].bet=SBA; players[N-1].bet=BB;
   const runout=[deck.pop(),deck.pop(),deck.pop(),deck.pop(),deck.pop()]; // борд сдаётся сразу и не меняется
@@ -583,12 +583,14 @@ const NATIVE_RANDOM=Math.random;
 function seeded(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 function newHand(){
   Math.random=NATIVE_RANDOM;
+  const E=REC&&RUN?profEst(RUN):null, want=E?sitWant(E):null;
+  if(E){ const r=repPick(E); if(r) return r; Math.random=NATIVE_RANDOM; }
   for(let t=0;t<(REC?2500:500);t++){
     const seed=Math.floor(NATIVE_RANDOM()*4294967296); if(REC) Math.random=seeded(seed);
     const h=setupHand(); H=h; run(h);
     if(h.over) continue;
     const d=heroDec(h), c=cls(d.ch,h.players[h.hero].h);
-    if(REC){ const r=recPick(h,d,seed,t); if(r) return r; continue; }
+    if(REC&&E){ const r=recPick(h,d,seed,t,E,want); if(r) return r; continue; }
     if(c==='F' && !WIDE.R.has(h.players[h.hero].h) && !WIDE.RF.has(h.players[h.hero].h) && Math.random()<.8) continue;
     if(c==='F' && d.level>=1 && Math.random()<.55) continue;
     if(GAME==='hand' && c==='F' && Math.random()<.85) continue;
@@ -1359,7 +1361,7 @@ function setGame(g){
 let RS=null; // текущая сессия записи
 // standalone-версия: завершённые сессии уходят POST-запросом в веб-приложение Apps Script (Google Таблица)
 let DBST='wait';
-function startRun(name){ S.player=name; save(); RUN={name,hands:[]}; newSession(); updScore(); }
+function startRun(name){ S.player=name; save(); RUN={name,hands:[]}; newSession(); loadHist(); updScore(); }
 function recCount(){ if(!S.recs) return 0; return S.recs.filter(r=>r.name===S.player).reduce((a,r)=>a+r.dec.length,0); }
 function newSession(){ const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   RS={id,name:S.player,started:Date.now(),updated:Date.now(),dec:[]}; // в базу и в браузер попадает только завершённый тест
@@ -1375,42 +1377,106 @@ function isEdge(ch,hh){ const c=cls(ch,hh); if(c.length===2) return true; const 
 function chen(hh){ const v=r=>({A:10,K:8,Q:7,J:6}[r]||(r==='T'?5:(+r)/2)); const a=hh[0], b=hh[1];
   if(a===b) return Math.max(5,v(a)*2); let x=v(a); if(hh[2]==='s') x+=2; const g=ri(b)-ri(a)-1; x-=[0,1,2,4][g]??5; if(g<=1&&ri(a)>ri('Q')) x+=1; return x; }
 const HPOS={}; (()=>{ const o=[...ALL169].sort((x,y)=>chen(y)-chen(x)); let c=0; for(const hh of o){ const n=combos(hh); HPOS[hh]=(c+n/2)/1326; c+=n; } })();
-// насколько игрок шире (>1) или уже (<1) правильной игры; на старте считаем лузовым, как дома
-function looseEst(){ let pl=0,sh=0; if(RUN) for(const h of RUN.hands){ const w=1/(h.keepW||1); for(const x of h.decisions){ if(x.post) continue; const n=x.al.length;
-    sh+=w*x.al.filter(a=>a==='C'||a==='R').length/n; if(x.a==='C'||x.a==='R') pl+=w; } }
-  const k=1.2; return Math.max(.3,Math.min(4,(pl+2*k)/(sh+k))); }
-// овершут: первые раздачи заметно дальше от границы игрока (по очереди сильнее и слабее), дальше разброс сужается к центру
+// ---- профиль: подбор раздач по ситуациям, классам рук и истории игрока ----
+// история: последние ≤300 префлоп-решений игрока из прошлых тестов «Профиля» и журнала «Префлопа» (только с аккаунтом)
+let HIST={rows:[],st:'none'}, SMAP=null;
+function loadHist(){ HIST={rows:[],st:'none'};
+  if(typeof AUTH==='undefined'||!AUTH||typeof ENDPOINT==='undefined'||!ENDPOINT) return;
+  HIST.st='load'; api('history',{token:AUTH.token}).then(r=>{ if(r&&r.ok&&Array.isArray(r.dec)){ HIST.rows=r.dec.filter(x=>x&&HPOS[x.h]!=null); HIST.st='ok'; } else HIST.st='err'; }).catch(()=>{ HIST.st='err'; }); }
+// классы рук: граница диапазона считается для каждого отдельно
+const HCLS={pair:'пары',axs:'Ax одномастные',axo:'Ax разномастные',bw:'бродвеи',sc:'одномастные коннекторы и гэпперы',sx:'прочие одномастные',ox:'прочие разномастные'};
+function hcls(hh){ if(hh.length===2) return 'pair'; const a=hh[0], b=hh[1], s=hh[2]==='s';
+  if(a==='A') return s?'axs':'axo'; if(ri(b)<=ri('T')) return 'bw'; return s?(ri(b)-ri(a)<=3?'sc':'sx'):'ox'; }
+const CLSH={}; for(const hh of ALL169) (CLSH[hcls(hh)]=CLSH[hcls(hh)]||[]).push(hh); for(const k in CLSH) CLSH[k].sort((x,y)=>HPOS[x]-HPOS[y]);
+// явные выбросы (случайный клик или шутка) в оценку не идут: сброс AA, KK, AKs и олл-ин мусором
+function isOutlier(hh,a,amt,ok){ ok=ok||[];
+  if(a==='F'&&(hh==='AA'||hh==='KK'||hh==='AKs')&&!ok.includes('F')) return 'fold';
+  if(a==='R'&&amt>=STACK*.9&&HPOS[hh]>.45&&!ok.includes('R')) return 'jam'; return null; }
+// ситуация решения из истории (там нет стола, только метка позиции)
+function sitRow(r){ const L=LABELS[r.N]||LABELS[9], i=L.indexOf(r.pos); if(i<0) return null; const n=L.length, sb=i===n-2, bb=i===n-1, ds=n-3-i;
+  if(r.k==='open'){ if(bb) return null; if(sb) return 'open-SB'; return ds>=3?'open-EP':ds>=1?'open-MP':'open-LP'; }
+  if(r.k==='vsopen') return bb?'def-BB':sb?'def-SB':'def-IP'; if(r.k==='vs3b') return 'vs3b'; return null; }
+const PLAYK=['R','C','RC','RF','CF'], RAISEK=['R','RC','RF'];
+const playsG=al=>(al||[]).some(a=>a==='C'||a==='R');
+function curPts(run){ const out=[]; if(!run) return out;
+  for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue; const sg=sitOf(h,x); if(!sg||isOutlier(x.h,x.a,x.amt,x.al)) continue;
+    out.push({sg,h:x.h,pos:HPOS[x.h],c:hcls(x.h),y:x.a==='C'||x.a==='R',yr:x.a==='R',g:playsG(x.al),w:1,q:widthOf(x.d.ch,PLAYK),qr:widthOf(x.d.ch,RAISEK),ch:x.d.ch}); }
+  return out; }
+// вес истории убывает с давностью (новые решения важнее старых)
+function histPts(){ const out=[], R=HIST.rows, n=R.length;
+  R.forEach((r,i)=>{ const sg=sitRow(r); if(!sg||isOutlier(r.h,r.a,r.amt,r.ok)) return;
+    out.push({sg,h:r.h,pos:HPOS[r.h],c:hcls(r.h),y:r.a==='C'||r.a==='R',yr:r.a==='R',g:playsG(r.ok),w:Math.exp(-(n-1-i)/150),hist:1}); });
+  return out; }
+// текущий тест всегда весит больше: история в сумме не больше половины его решений; где решений теста нет — история как стартовая точка (до cap0 решений)
+function mixPts(cur,his,cap0){ const n=cur.reduce((s,p)=>s+p.w,0), hw=his.reduce((s,p)=>s+p.w,0), cap=n>0?n/2:cap0, k=hw>cap?cap/hw:1;
+  return {pts:cur.concat(his.map(p=>Object.assign({},p,{w:p.w*k}))),n,hw:hw*k}; }
+// порог t (доля лучших комбо), с которого игрок входит в банк; мягкая граница шириной S, априорное ожидание prior±sd; sd — неопределённость оценки
+function fitW(pts,prior,sd,key){ const S=.035, G=[]; let mx=-1e18;
+  for(let t=0;t<=1.0001;t+=.0025){ let ll=-((t-prior)**2)/(2*sd*sd);
+    for(const q of pts){ const z=(t-q.pos)/S, pr=Math.min(.995,Math.max(.005,1/(1+Math.exp(-z)))); ll+=q.w*(q[key]?Math.log(pr):Math.log(1-pr)); }
+    G.push([t,ll]); if(ll>mx) mx=ll; }
+  let s=0,m=0,m2=0,best=prior,bl=-1e18; for(const [t,ll] of G){ const p=Math.exp(ll-mx); s+=p; m+=p*t; m2+=p*t*t; if(ll>bl){ bl=ll; best=t; } }
+  m/=s; return {t:best,sd:Math.sqrt(Math.max(0,m2/s-m*m))}; }
+// оценки по всем ситуациям и классам: k — сила притяжения общего коэффициента ширины к стартовому значению L0
+function profEst(run,L0=2,k=1.2){ const C=curPts(run), Hh=histPts(), E={};
+  const M0=mixPts(C,Hh,6); let pl=0,sh=0; for(const p of M0.pts){ if(p.y) pl+=p.w; if(p.g) sh+=p.w; }
+  const L=Math.max(.3,Math.min(4,(pl+L0*k)/(sh+k)));
+  for(const sg of Object.keys(SIT)){ const c=C.filter(p=>p.sg===sg), hh=Hh.filter(p=>p.sg===sg);
+    const q=c.length?c.reduce((s,p)=>s+p.q,0)/c.length:SITQ[sg].q, qr=c.length?c.reduce((s,p)=>s+p.qr,0)/c.length:SITQ[sg].qr;
+    const M=mixPts(c,hh,3), f=fitW(M.pts,Math.min(.95,q*L),.15,'y'), fr=fitW(M.pts,Math.min(.95,qr*L),.15,'yr');
+    const cnt=new Map(); for(const p of c) cnt.set(p.ch,(cnt.get(p.ch)||0)+1);
+    const ch=cnt.size?[...cnt.entries()].sort((a,b)=>b[1]-a[1])[0][0]:SITCH[sg][0];
+    const cl={}; for(const kk of Object.keys(HCLS)){ const cc=c.filter(p=>p.c===kk), hc=hh.filter(p=>p.c===kk);
+      const fk=cc.length||hc.length?fitW(mixPts(cc,hc,3).pts,f.t,.1,'y'):{t:f.t,sd:.1};
+      cl[kk]={n:cc.length,nh:hc.length,t:fk.t,sd:fk.sd,near:cc.filter(p=>Math.abs(p.pos-fk.t)<.1).length,avail:CLSH[kk].some(x=>Math.abs(HPOS[x]-fk.t)<.1)}; }
+    E[sg]={n:c.length,nh:hh.length,hw:M.hw,q,qr,t:f.t,sd:f.sd,tr:Math.min(f.t,fr.t),cls:cl,ch}; }
+  E._L=L; E._nh=Hh.length; return E; }
+// сколько решений каждой ситуации хотим за тест; остальное добирается туда, где граница известна хуже всего
+const SQUOTA={'open-EP':6,'open-MP':6,'open-LP':5,'open-SB':5,'def-BB':6,'def-SB':5,'def-IP':6,'vs3b':5};
+function sitWant(E){ const k=RUN.hands.length; let best=null,bs=-1;
+  for(const [sg,T] of Object.entries(SQUOTA)){ const e=E[sg], due=T*(k+1)/PROF_N-e.n; if(e.n>=T*1.6) continue;
+    const s=e.sd*(1+Math.max(0,due))*(due>.5?2:1); if(s>bs){ bs=s; best=sg; } } return best; }
+// в защите часть раздач целим в границу 3-бета, а не колла
+function need3b(){ let have=0; for(const h of RUN.hands) if((h.cats||[]).includes('3bet')) have++; return 6*(RUN.hands.length+1)/PROF_N-have>.5; }
+// овершут: сначала заметно дальше от текущей оценки границы (по очереди сильнее и слабее), с ростом данных разброс сужается
 function bandKeep(pos,c){ return Math.abs(pos-c)<=.06?1:(pos<c?.2:.03); }
-function recKeep(h,d){ const hh=h.players[h.hero].h, pos=HPOS[hh]; let q=0; for(const x of ALL169) if(cls(d.ch,x)!=='F') q+=combos(x); q/=1326;
-  const k=RUN?RUN.hands.length:0, L=looseEst(), qp=Math.max(.02,Math.min(.95,q*L));
-  const amp=.22*Math.exp(-k/12)+.04, sg=k%2?1:-1, c1=Math.max(.01,Math.min(.97,qp+sg*amp));
-  h.probe={L:+L.toFixed(2),q:+q.toFixed(3),qp:+qp.toFixed(3),c:+c1.toFixed(3)};
-  if(pos>.82||pos>Math.max(q,qp)+.25&&pos>.55) return 0; // явный мусор не сдаём
-  return .7*bandKeep(pos,c1)+.3*bandKeep(pos,q); }
-// какие правильные по GTO действия встретятся, если сыграть раздачу по GTO (те же карты, то же зерно)
+function recKeep(h,d,E,sg,mode){ const hh=h.players[h.hero].h, pos=HPOS[hh], e=E[sg], kk=hcls(hh), ec=e.cls[kk];
+  const base=mode==='yr'?e.tr:ec.t, q=mode==='yr'?e.qr:e.q;
+  const amp=Math.min(.22,.04+1.2*e.sd*Math.exp(-e.n/6)), sg1=e.n%2?1:-1, c1=Math.max(.01,Math.min(.97,base+sg1*amp));
+  h.probe={sg,cl:kk,m:mode,t:+base.toFixed(3),sd:+e.sd.toFixed(3),q:+q.toFixed(3),c:+c1.toFixed(3),L:+E._L.toFixed(2)};
+  if(pos>.82||pos>Math.max(q,c1)+.25&&pos>.55) return 0; // явный мусор не сдаём
+  // классы рук, которых у границы ещё мало, сдаём чаще
+  let mn=1e9; for(const x of Object.values(e.cls)) if(x.avail&&x.near<mn) mn=x.near; const cb=mn<1e9?Math.max(.35,(1+mn)/(1+ec.near)):1;
+  return cb*(.7*bandKeep(pos,c1)+.3*bandKeep(pos,q)); }
+// какие правильные по GTO действия встретятся, если сыграть раздачу по GTO (те же карты, то же зерно); open — сыграть первое решение рейзом
 function catOf(d,a){ if(a==='R') return d.kind==='vsopen'?'3bet':(d.kind==='vs3b'||d.kind==='cold3b')?'4bet':d.kind==='open'?'raise':'raise+';
   if(a==='C') return d.kind==='open'?'limp':'call'; return a==='X'?'check':'fold'; }
-function gtoPath(seed){ Math.random=seeded(seed); const h=setupHand(); H=h; run(h); const cats=new Set(); let g=0;
+function gtoPath(seed,open){ Math.random=seeded(seed); const h=setupHand(); H=h; run(h); const cats=new Set(); let g=0, v3=false;
   while(!h.over&&h.toAct[0]===h.hero&&g++<6){ const d=heroDec(h), al=allowedFor(d,cls(d.ch,h.players[h.hero].h));
-    for(const a of al) cats.add(catOf(d,a));
-    const a=al.has('R')?'R':al.has('C')?'C':al.has('X')?'X':'F', b=sizeBands(d).best, amt=a==='R'?Math.max(d.minTo,Math.min(STACK,ev((b[0]+b[1])/2))):0;
+    if(d.kind==='vs3b') v3=true; for(const a of al) cats.add(catOf(d,a));
+    const a=open&&g===1&&d.canRaise?'R':al.has('R')?'R':al.has('C')?'C':al.has('X')?'X':'F', b=sizeBands(d).best, amt=a==='R'?Math.max(d.minTo,Math.min(STACK,ev((b[0]+b[1])/2))):0;
     apply(h,h.hero,a,amt); if(!checkOver(h)) run(h); }
-  return cats; }
-// минимум спотов за тест по правильному ответу GTO; остальное — рейзы и фолды
-const QUOTA={'3bet':6,'4bet':2,'call':5};
-function needCat(){ if(!RUN) return null; const k=RUN.hands.length, have={}; for(const h of RUN.hands) for(const c of (h.cats||[])) have[c]=(have[c]||0)+1;
-  let best=null, bd=.5; for(const [c,T] of Object.entries(QUOTA)){ const due=T*(k+1)/PROF_N-(have[c]||0); if(due>bd){ bd=due; best=c; } } return best; }
-function recPick(h,d,seed,t){ const want=needCat(), hh=h.players[h.hero].h, al=allowedFor(d,cls(d.ch,hh));
-  let kw;
-  if(want&&t<2000){ // ищем спот нужного типа: отсекаем заранее, потом проверяем проигрышем по GTO
-    if(want==='3bet'&&!(d.kind==='vsopen'&&al.has('R'))) return null;
-    if(want==='call'&&!(d.level>=1&&al.has('C'))) return null;
-    if(want==='4bet'&&!(d.kind==='open'&&HPOS[hh]<.08)) return null;
-    kw=Math.max(.5,recKeep(h,d)); if(want!=='4bet'&&NATIVE_RANDOM()>kw) return null; }
-  else { kw=recKeep(h,d); if(NATIVE_RANDOM()>=kw) return null; }
-  const probe=h.probe, cats=gtoPath(seed); if(want&&t<2000&&!cats.has(want)) return null;
+  return {cats,v3}; }
+function recPick(h,d,seed,t,E,want){ const hh=h.players[h.hero].h, s0=sitOf(h,{d}); let sg=s0, mode='y', kw;
+  const strict=want&&t<1500;
+  if(strict){
+    if(want==='vs3b'){ if(!s0||!s0.startsWith('open')||HPOS[hh]>Math.max(E[s0].t,E[s0].q)) return null; sg='vs3b'; }
+    else if(s0!==want) return null;
+    if(sg.startsWith('def')&&need3b()) mode='yr'; }
+  if(sg) kw=recKeep(h,d,E,sg,mode); else { kw=bandKeep(HPOS[hh],widthOf(d.ch,PLAYK)); h.probe=null; }
+  if(NATIVE_RANDOM()>=kw) return null;
+  const probe=h.probe, P=gtoPath(seed,sg==='vs3b'); if(strict&&sg==='vs3b'&&!P.v3) return null;
   Math.random=seeded(seed); const r=setupHand(); H=r; run(r); // настоящая раздача с того же зерна
-  r.keepW=kw||1; r.seed=seed; r.cats=[...cats]; r.probe=probe; return r; }
+  r.keepW=kw||1; r.seed=seed; r.cats=[...P.cats]; r.probe=probe; return r; }
+// повторы: 3 раза за тест та же раздача у границы (те же карты и действия до игрока, другие масти), чтобы проверить стабильность
+const REP_AT=[17,29,41];
+function repPick(E){ const k=RUN.hands.length; if(!REP_AT.includes(k)) return null;
+  let best=-1,bd=1; RUN.hands.forEach((h,i)=>{ if(i>k-8||h.rep!=null||h.repd||h.seed==null) return; const x=h.decisions.find(x=>!x.post); if(!x) return; const sg=sitOf(h,x); if(!sg) return;
+    const dd=Math.abs(HPOS[x.h]-E[sg].cls[hcls(x.h)].t); if(dd<bd){ bd=dd; best=i; } });
+  if(best<0) return null; const o=RUN.hands[best], sh=1+Math.floor(NATIVE_RANDOM()*3), sm={}; SUITS.forEach((s,i)=>sm[s]=SUITS[(i+sh)%4]);
+  SMAP=sm; Math.random=seeded(o.seed); const r=setupHand(); SMAP=null; H=r; run(r);
+  if(r.over||r.toAct[0]!==r.hero) return null; o.repd=true;
+  r.seed=o.seed; r.smap=sm; r.rep=best+1; r.keepW=o.keepW; r.cats=o.cats; r.probe=Object.assign({},o.probe,{rep:best+1}); return r; }
 function progEl(k){ const e=document.createElement('div'); e.className='prog'; e.innerHTML=`<span>Раздача ${Math.min(k,PROF_N)} из ${PROF_N}</span><i><b style="width:${Math.round(Math.min(k,PROF_N)/PROF_N*100)}%"></b></i>`; return e; }
 function recDecision(h,d,a,amt){
   if(!REC||!RUN||h.street>0) return;
@@ -1420,7 +1486,7 @@ function recDecision(h,d,a,amt){
   RS.dec.push({t:Date.now(),m:REC?'rec':MODE,g:GAME,N,pos:lab(h.hero),d:isSB(h.hero)?-1:isBB(h.hero)?-2:dist(h.hero),
     h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,lim:d.level===0?h.callers:null,
     open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,callers:d.level>=1?h.callers:null,
-    cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,ok:h.decisions[h.decisions.length-1].al,n:RUN.hands.length+1,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
+    cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,ok:h.decisions[h.decisions.length-1].al,n:RUN.hands.length+1,s:sitOf(h,{d}),rep:h.rep||null,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
   RS.updated=Date.now(); }
 // личный журнал «Префлопа»: пишется в отдельный лист базы, в статистику аккаунта не попадает
 let PS=null; const PS_MAX=200, PS_GAP=30*60*1000;
@@ -1453,8 +1519,8 @@ function goBack(){ clearTimeout(ANIM); ANIM=null; FRAMES=[]; const cur=H, prev=R
   v.appendChild(tx); p.append(v,back); }
 function replayPrev(){ const {cur,prev}=BACK; RUN.hands.pop();
   const idx=Math.min(prev.recIdx??RS.dec.length, cur.recIdx??RS.dec.length); RS.dec.splice(idx); RS.summary=null; RS.updated=Date.now();
-  Math.random=seeded(prev.seed); const h=setupHand(); H=h; run(h); // дальше раздача идёт по тому же зерну, как в оригинале
-  h.seed=prev.seed; h.keepW=prev.keepW; h.probe=prev.probe; h.cats=prev.cats; h.replayed=true; h.backUsed=true;
+  Math.random=seeded(prev.seed); SMAP=prev.smap||null; const h=setupHand(); SMAP=null; H=h; run(h); // дальше раздача идёт по тому же зерну, как в оригинале
+  h.smap=prev.smap; h.rep=prev.rep; h.seed=prev.seed; h.keepW=prev.keepW; h.probe=prev.probe; h.cats=prev.cats; h.replayed=true; h.backUsed=true;
   BACK=null; IDLE=false; play(); updScore(); }
 
 // ---- итог профиля ----
@@ -1482,13 +1548,43 @@ function sitOf(h,x){ const p=h.hero, k=x.d.kind;
   if(k==='open'){ if(isSB(p)) return 'open-SB'; const t=dist(p); return t>=3?'open-EP':t>=1?'open-MP':'open-LP'; }
   if(k==='vsopen') return isBB(p)?'def-BB':isSB(p)?'def-SB':'def-IP';
   if(k==='vs3b') return 'vs3b'; return null; }
-// порог t: игрок играет руки сильнее t (доля лучших комбо), мягкая граница шириной S; поиск по сетке с априорным ожиданием
-function fitT(pts,prior,sd){ const S=.035; let best=prior,bl=-1e18;
-  for(let t=0;t<=1.0001;t+=.0025){ let ll=-((t-prior)**2)/(2*sd*sd);
-    for(const q of pts){ const z=(t-q.pos)/S, pr=Math.min(.995,Math.max(.005,1/(1+Math.exp(-z)))); ll+=q.y?Math.log(pr):Math.log(1-pr); }
-    if(ll>bl){ bl=ll; best=t; } }
-  return best; }
 const widthOf=(ch,keys)=>{ let n=0; for(const hh of ALL169) if(keys.includes(cls(ch,hh))) n+=combos(hh); return n/1326; };
+// GTO-ширина ситуации по умолчанию (пока в тесте нет решений этой ситуации); первый чарт — типичный для показа границ по классам
+const SITCH={'open-EP':[RFI[4],RFI[6],RFI[5],RFI[3]],'open-MP':[RFI[2],RFI[1]],'open-LP':[RFI[0]],'open-SB':[RFI.SB],
+  'def-BB':['LP-BB','EP-BB','MP-BB','SB-BB'].map(k=>VSOPEN[k]),'def-SB':['LP-SB','EP-SB','MP-SB'].map(k=>VSOPEN[k]),'def-IP':['MP-IP','EP-IP','LP-IP'].map(k=>VSOPEN[k]),
+  'vs3b':['LP-OOP','EP-OOP','EP-IP','MP-OOP','MP-IP','LP-IP'].map(k=>VS3B[k])};
+const SITQ={}; for(const [sg,l] of Object.entries(SITCH)) SITQ[sg]={q:l.reduce((s,ch)=>s+widthOf(ch,PLAYK),0)/l.length,qr:l.reduce((s,ch)=>s+widthOf(ch,RAISEK),0)/l.length};
+// граница внутри класса: самая слабая рука класса, которую игрок (или GTO) играет
+function clsEdge(kk,t){ let w=null; for(const hh of CLSH[kk]) if(HPOS[hh]<=t) w=hh; return w; }
+function gtoEdge(kk,ch){ let w=null; for(const hh of CLSH[kk]) if(PLAYK.includes(cls(ch,hh))) w=hh; return w; }
+function edgeTxt(kk,hh){ const l=CLSH[kk]; if(!hh) return 'не играет'; if(hh===l[l.length-1]) return 'все'; return hh+'+'; }
+// пары и тузы упорядочены по старшинству, поэтому граница — рука; в смешанных классах — доля рук класса
+const ORDERED=new Set(['pair','axs','axo']);
+function shareTxt(n,all){ return !n?'не играет':n>=all?'все':Math.round(n/all*100)+'%'; }
+function clsTxt(kk,t,ch){ const l=CLSH[kk], cb=hh=>combos(hh), all=l.reduce((s,hh)=>s+cb(hh),0);
+  if(ORDERED.has(kk)) return `${edgeTxt(kk,clsEdge(kk,t))} (GTO ${edgeTxt(kk,gtoEdge(kk,ch))})`;
+  const p=l.filter(hh=>HPOS[hh]<=t).reduce((s,hh)=>s+cb(hh),0), g=l.filter(hh=>PLAYK.includes(cls(ch,hh))).reduce((s,hh)=>s+cb(hh),0);
+  return `${shareTxt(p,all)} (GTO ${shareTxt(g,all)})`; }
+// сайзинг-теллы: размер рейза с премиумом (QQ+, JJ, AK, AQs) против остальных рук в той же ситуации
+const PREMH=new Set(['AA','KK','QQ','JJ','AKs','AKo','AQs']);
+function sizeTells(run){ const G={open:[],vsopen:[],vs3b:[]};
+  const add=(k,hh,amt,v,src)=>{ if(!G[k]||!amt||!(v>0)||!isFinite(v)) return; G[k].push({h:hh,amt,v,p:PREMH.has(hh),src}); };
+  if(run) for(const h of run.hands) for(const x of h.decisions){ if(x.post||x.a!=='R'||isOutlier(x.h,x.a,x.amt,x.al)) continue; const k=x.d.kind;
+    add(k,x.h,x.amt,k==='open'?x.amt-BB*(x.d.callers||0):x.amt/x.d.curBet,'cur'); }
+  for(const r of HIST.rows){ if(r.a!=='R'||isOutlier(r.h,r.a,r.amt,r.ok)) continue;
+    add(r.k,r.h,r.amt,r.k==='open'?r.amt-BB*(r.lim||0):r.k==='vsopen'?r.amt/r.open:r.amt/r.cur,'hist'); }
+  const med=a=>{ const s=[...a].sort((x,y)=>x-y), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+  const NM={open:'Опен',vsopen:'3-бет',vs3b:'4-бет'}, out=[];
+  for(const [k,l] of Object.entries(G)){ const P=l.filter(x=>x.p), O=l.filter(x=>!x.p); if(!P.length||O.length<2) continue;
+    const r=med(P.map(x=>x.v))/med(O.map(x=>x.v)), ap=Math.round(med(P.map(x=>x.amt))), ao=Math.round(med(O.map(x=>x.amt)));
+    const ex=[...new Set(P.map(x=>x.h))].slice(0,3).join(', '), tell=r>=1.35?'up':r<=.74?'down':null;
+    out.push({k,tell,np:P.length,no:O.length,ap,ao,txt:tell?`${NM[k]}: с премиумом (${ex}) обычно до ${ap}, с остальными до ${ao}. Размер выдаёт силу руки: с сильной ${tell==='up'?'крупнее':'мельче'}.`
+      :`${NM[k]}: с премиумом (${ex}) до ${ap}, с остальными до ${ao}. Размер силу не выдаёт.`}); }
+  return out; }
+// повторы одной и той же раздачи: сыграна ли так же
+function repStats(run){ const out=[]; run.hands.forEach((h,i)=>{ if(h.rep==null) return; const o=run.hands[h.rep-1]; if(!o) return;
+  const a=h.decisions.find(x=>!x.post), b=o.decisions.find(x=>!x.post); if(!a||!b) return;
+  out.push({h:a.h,pos:a.pos,same:a.a===b.a,a1:b.a==='R'?RAISE_NAME[b.d.kind]:actWord(b.a,b.d),a2:a.a==='R'?RAISE_NAME[a.d.kind]:actWord(a.a,a.d),n1:h.rep,n2:i+1}); }); return out; }
 // соответствие GTO по модели сложности (IRT): у решения сложность тем выше, чем ближе рука к границе GTO;
 // ошибка на лёгком решении сильно тянет вниз, верный ответ на сложном сильно поднимает
 function irtScore(run){ const items=[];
@@ -1505,11 +1601,12 @@ function irtScore(run){ const items=[];
   const easy=items.filter(i=>i.b<-1), hard=items.filter(i=>i.b>.5);
   return {score:sc*100,theta:th,n:items.length,easyMiss:easy.filter(i=>i.y===0).length,easyN:easy.length,hardHit:hard.filter(i=>i.y>0).length,hardN:hard.length}; }
 function profAnalyze(run){
-  const G={}; let nDec=0,good=0; const errs={}; const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0};
+  const G={}; let nDec=0,good=0; const errs={}, outs=[]; const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0};
   const F={fo:0,fp:[],po:0,pf:[],ro:0,rc:[],ao:0,ar:[],lo:0,lim:0,vo:0,v3:0,vc:0,vf:0,g3:0,gc:0,gf:0,to:0,tf:0,tc:0,t4:0,bp:0,bpf:0,bf:0,bfp:0,tp:0,tpf:0};
   let plW=0,shW=0; // общий коэффициент ширины по сырым данным, нужен как стартовое ожидание
   for(const h of run.hands){ const w=1/(h.keepW||1); let first=true;
     for(const x of h.decisions.filter(x=>!x.post)){ nDec++; if(x.g===2) good++;
+      const ol=isOutlier(x.h,x.a,x.amt,x.al); if(ol){ outs.push(`${ol==='fold'?'сброс':'олл-ин'} ${prettyHand(x.h)} (${x.pos})`); first=false; continue; } // выброс: в оценку не идёт
       // отклонение от GTO для этой руки: вес тем больше, чем дальше рука от границы GTO-диапазона
       const gq=widthOf(x.d.ch,['R','C','RC','RF','CF']), far=Math.min(1,Math.abs(HPOS[x.h]-gq)/.15), sev=.4+.6*far;
       const gPlay=x.al.some(a=>a==='C'||a==='R'), gFold=x.al.some(a=>a==='F'||(a==='X'&&x.d.toCall<=0)), gRaise=x.al.includes('R'), gNoRaise=x.al.some(a=>a!=='R');
@@ -1530,17 +1627,14 @@ function profAnalyze(run){
       const k=errKind(x); if(k){ (errs[k]=errs[k]||[]).push({t:`${prettyHand(x.h)} (${x.pos})`,sev:x.g===1?0:sev}); }
       const n=x.al.length; shW+=w*x.al.filter(a=>a==='C'||a==='R').length/n; if(x.a==='C'||x.a==='R') plW+=w;
       const sg=sitOf(h,x); if(!sg){ first=false; continue; }
-      const g=G[sg]=G[sg]||{pts:[],rpts:[],q:0,qr:0,n:0,fw:0,lim:0};
-      const pos=HPOS[x.h], play=x.a==='C'||x.a==='R';
-      g.pts.push({pos,y:play}); g.rpts.push({pos,y:x.a==='R'}); if(x.a==='C'&&sg.startsWith('open')) g.lim++;
-      g.q+=widthOf(x.d.ch,['R','C','RC','RF','CF']); g.qr+=widthOf(x.d.ch,['R','RC','RF']); g.n++;
+      const g=G[sg]=G[sg]||{fw:0,lim:0}; if(x.a==='C'&&sg.startsWith('open')) g.lim++;
       if(first) g.fw+=w; first=false; } }
-  const Lraw=Math.max(.3,Math.min(4,(plW+1.2)/(shW+1.2))); // с мягким притяжением к 1
+  // границы по ситуациям и классам: текущий тест + история (её вес не больше половины теста)
+  const E=profEst(run,1,1.2);
   let V=0,Vg=0,P=0,Pg=0,FW=0; const rows=[];
-  for(const [sg,g] of Object.entries(G)){ const q=g.q/g.n, qr=g.qr/g.n;
-    const t=fitT(g.pts,Math.min(.95,q*Lraw),.15), tr=Math.min(t,fitT(g.rpts,Math.min(.95,qr*Lraw),.15));
-    rows.push({sg,n:g.n,t,tr,q,qr,lim:g.lim});
-    if(g.fw){ V+=g.fw*t; Vg+=g.fw*q; P+=g.fw*tr; Pg+=g.fw*qr; FW+=g.fw; } }
+  for(const sg of Object.keys(SIT)){ const e=E[sg], g=G[sg]; if(!e.n&&!e.nh) continue;
+    rows.push({sg,n:e.n,nh:e.nh,t:e.t,tr:e.tr,q:e.q,qr:e.qr,lim:g?g.lim:0,cls:e.cls,ch:e.ch});
+    if(g&&g.fw){ V+=g.fw*e.t; Vg+=g.fw*e.q; P+=g.fw*e.tr; Pg+=g.fw*e.qr; FW+=g.fw; } }
   if(FW){ V/=FW; Vg/=FW; P/=FW; Pg/=FW; }
   rows.sort((a,b)=>Object.keys(SIT).indexOf(a.sg)-Object.keys(SIT).indexOf(b.sg));
   const L=Vg?V/Vg:1, acc=nDec?good/nDec*100:0;
@@ -1580,11 +1674,13 @@ function profAnalyze(run){
   if(F.lo) facts.push(F.lim?`Лимпил первым в банк ${F.lim} раз из ${F.lo}.`:`Первым в банк ни разу не лимпил (${F.lo} раз из ${F.lo} рейз или фолд).`);
   if(F.vo) facts.push(`Против опена (${F.vo} раз): 3-бет ${F.v3}, колл ${F.vc}, фолд ${F.vf}.`);
   if(F.to) facts.push(`Против 3-бета (${F.to} раз): 4-бет ${F.t4}, колл ${F.tc}, фолд ${F.tf}.`);
-  return {irt:irtScore(run),facts,V:V*100,Vc:Vg*100,P:P*100,Pc:Pg*100,L,acc,nDec,good,type:T[0],short:T[1],conf,traits,rows,ranked,lo,ti,pa,ag,dev};
+  return {outs,nh:E._nh,tells:sizeTells(run),reps:repStats(run),irt:irtScore(run),facts,V:V*100,Vc:Vg*100,P:P*100,Pc:Pg*100,L,acc,nDec,good,type:T[0],short:T[1],conf,traits,rows,ranked,lo,ti,pa,ag,dev};
 }
 function renderResults(){
   const p=$('#panel'); p.innerHTML=''; const run=RUN, A=profAnalyze(run), pc=x=>Math.round(x)+'%';
-  if(RS&&!RS.summary){ S.recs=(S.recs||[]).concat([RS]); trimRecs(); RS.summary={type:A.type,gto:A.irt?Math.round(A.irt.score):null,conf:A.conf,loose:Math.round(A.lo*100),tight:Math.round(A.ti*100),passive:Math.round(A.pa*100),aggr:Math.round(A.ag*100),vpip:Math.round(A.V),vpipGto:Math.round(A.Vc),pfr:Math.round(A.P),pfrGto:Math.round(A.Pc),traits:A.traits,acc:Math.round(A.acc),hands:run.hands.length,ranges:A.rows.map(x=>({s:x.sg,n:x.n,play:Math.round(x.t*100),gto:Math.round(x.q*100),raise:Math.round(x.tr*100),raiseGto:Math.round(x.qr*100)}))}; RS.updated=Date.now(); save(); persist(RS); }
+  if(RS&&!RS.summary){ S.recs=(S.recs||[]).concat([RS]); trimRecs(); RS.summary={type:A.type,gto:A.irt?Math.round(A.irt.score):null,conf:A.conf,loose:Math.round(A.lo*100),tight:Math.round(A.ti*100),passive:Math.round(A.pa*100),aggr:Math.round(A.ag*100),vpip:Math.round(A.V),vpipGto:Math.round(A.Vc),pfr:Math.round(A.P),pfrGto:Math.round(A.Pc),traits:A.traits,acc:Math.round(A.acc),hands:run.hands.length,hist:A.nh,ranges:A.rows.map(x=>({s:x.sg,n:x.n,nh:x.nh,play:Math.round(x.t*100),gto:Math.round(x.q*100),raise:Math.round(x.tr*100),raiseGto:Math.round(x.qr*100),
+    cls:Object.fromEntries(Object.entries(x.cls).filter(([,c])=>c.n||c.nh).map(([k,c])=>[k,{txt:clsTxt(k,c.t,x.ch),n:c.n,nh:c.nh}]))})),
+    sizing:A.tells.map(t=>t.txt),reps:A.reps.map(r=>({h:r.h,pos:r.pos,same:r.same,a1:r.a1,a2:r.a2})),outs:A.outs}; RS.updated=Date.now(); save(); persist(RS); }
   const v=document.createElement('section'); v.className='verdict res'; v.id='results';
   const hd=document.createElement('div'); hd.innerHTML='<p class="psub"></p><h2 class="ptype"></h2><p class="psub"></p>';
   hd.children[0].textContent=`Профиль игрока «${run.name}»`; hd.children[1].textContent=A.type; hd.children[2].textContent=`VPIP ${pc(A.V)} (по GTO ${pc(A.Vc)}), PFR ${pc(A.P)} (по GTO ${pc(A.Pc)}). Уверенность оценки: ${A.conf}.`;
@@ -1603,11 +1699,23 @@ function renderResults(){
   v.appendChild(st);
   if(A.rows.length){ const tb=document.createElement('table'); tb.className='st';
     tb.innerHTML='<thead><tr><th>Ситуация</th><th>Рук</th><th>Играет</th><th>GTO</th></tr></thead><tbody></tbody>';
-    for(const x of A.rows){ const tr=document.createElement('tr'); const ratio=x.t/Math.max(.01,x.q), tag=x.n<3?' (мало данных)':ratio>1.3?' шире':ratio<.75?' уже':'';
-      tr.innerHTML='<td></td><td class="n"></td><td class="n"></td><td class="n"></td>'; tr.children[0].textContent=SIT[x.sg]+tag; tr.children[1].textContent=x.n;
+    for(const x of A.rows){ const tr=document.createElement('tr'); const ratio=x.t/Math.max(.01,x.q), tag=x.n+Math.min(x.nh,3)<3?' (мало данных)':ratio>1.3?' шире':ratio<.75?' уже':'';
+      tr.innerHTML='<td></td><td class="n"></td><td class="n"></td><td class="n"></td>'; tr.children[0].textContent=SIT[x.sg]+tag; tr.children[1].textContent=x.n+(x.nh?` (+${x.nh})`:'');
       tr.children[2].textContent=pc(x.t*100)+(x.tr<x.t-.005?` (рейз ${pc(x.tr*100)})`:''); tr.children[3].textContent=pc(x.q*100); tb.querySelector('tbody').appendChild(tr); }
-    const cap=document.createElement('p'); cap.className='hint'; cap.style.margin='0'; cap.textContent='Какую долю лучших рук игрок играет в каждой ситуации. Считается по границе: с какой силы руки он начинает входить в банк.';
-    v.append(tb,cap); }
+    const cap=document.createElement('p'); cap.className='hint'; cap.style.margin='0'; cap.textContent='Какую долю лучших рук игрок играет в каждой ситуации. Считается по границе: с какой силы руки он начинает входить в банк.'+(A.nh?` В скобках решения из прошлых раздач (всего ${A.nh}). Они нужны как стартовая точка и там, где в этом тесте данных нет. Их вес в каждой ситуации не больше половины решений этого теста, а старые весят меньше новых.`:'');
+    v.append(tb,cap);
+    // границы по классам рук
+    const cr=A.rows.filter(x=>x.n+Math.min(x.nh,3)>=3); if(cr.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Границы по классам рук</b>'; const ul=document.createElement('ul'); ul.className='tips';
+      for(const x of cr){ const parts=Object.entries(x.cls).filter(([,c])=>c.n||c.nh).map(([k,c])=>`${HCLS[k]} ${clsTxt(k,c.t,x.ch)}`);
+        if(!parts.length) continue; const li=document.createElement('li'); li.textContent=`${SIT[x.sg]}: ${parts.join('; ')}.`; ul.appendChild(li); }
+      const ch=document.createElement('p'); ch.className='hint'; ch.style.margin='0'; ch.textContent='Для пар и тузов указана самая слабая рука, с которой игрок входит в банк. Для остальных классов указана доля рук класса, которые он играет. Показаны классы, по которым есть решения.';
+      v.append(h3,ul,ch); } }
+  const extra=[];
+  for(const t of A.tells) extra.push(t.txt);
+  if(A.reps.length){ const ch=A.reps.filter(r=>!r.same); extra.push(`Повторы одной и той же раздачи: сыграно так же ${A.reps.length-ch.length} из ${A.reps.length}${ch.length?'. Поменял решение: '+ch.map(r=>`${prettyHand(r.h)} (${r.pos}) ${r.a1} → ${r.a2}`).join(', '):''}.`); }
+  if(A.outs.length) extra.push(`Не учтены в оценке как случайные: ${A.outs.join(', ')}.`);
+  if(extra.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Сайзинг и стабильность</b>'; const ul=document.createElement('ul'); ul.className='tips';
+    for(const t of extra){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul); }
   const sum=document.createElement('p');
   const top=A.ranked.filter(([k])=>k!=='other');
   sum.style.margin='0'; if(top.length) sum.innerHTML='<b>Что исправить</b>'; else sum.textContent='Ошибок нет: все решения совпали с GTO.';
