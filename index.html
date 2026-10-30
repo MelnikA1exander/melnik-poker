@@ -1462,9 +1462,11 @@ function profEst(run,L0=2,k=1.2){ const C=curPts(run), Hh=histPts(), E={};
   E._L=L; E._nh=Hh.length; return E; }
 // сколько решений каждой ситуации хотим за тест; остальное добирается туда, где граница известна хуже всего
 const SQUOTA={'open-EP':6,'open-MP':6,'open-LP':5,'open-SB':5,'def-BB':6,'def-SB':5,'def-IP':6,'vs3b':5};
+// промахи: раздача подобрана под ситуацию, но игрок до неё не дошёл (например, лимпит и не получает 3-бет); после 3 промахов ситуацию не добираем
+function sitMiss(sg){ let m=0; for(const h of RUN.hands) if(h.want===sg&&!h.decisions.some(x=>!x.post&&sitOf(h,x)===sg)) m++; return m; }
 function sitWant(E){ const k=RUN.hands.length; let best=null,bs=-1;
-  for(const [sg,T] of Object.entries(SQUOTA)){ const e=E[sg], due=T*(k+1)/PROF_N-e.n; if(e.n>=T*1.6) continue;
-    const s=e.sd*(1+Math.max(0,due))*(due>.5?2:1); if(s>bs){ bs=s; best=sg; } } return best; }
+  for(const [sg,T] of Object.entries(SQUOTA)){ const e=E[sg], due=T*(k+1)/PROF_N-e.n, ms=sitMiss(sg); if(e.n>=T*1.6||ms>=3) continue;
+    const s=e.sd*(1+Math.max(0,due))*(due>.5?2:1)/(1+ms); if(s>bs){ bs=s; best=sg; } } return best; }
 // в защите часть раздач целим в границу 3-бета, а не колла
 function need3b(){ let have=0; for(const h of RUN.hands) if((h.cats||[]).includes('3bet')) have++; return 6*(RUN.hands.length+1)/PROF_N-have>.5; }
 // овершут: сначала заметно дальше от текущей оценки границы (по очереди сильнее и слабее), с ростом данных разброс сужается
@@ -1473,7 +1475,7 @@ function recKeep(h,d,E,sg,mode){ const hh=h.players[h.hero].h, pos=HPOS[hh], e=E
   const base=mode==='yr'?e.tr:ec.t, q=mode==='yr'?e.qr:e.q;
   const amp=Math.min(.22,.04+1.2*e.sd*Math.exp(-e.n/6)), sg1=e.n%2?1:-1, c1=Math.max(.01,Math.min(.97,base+sg1*amp));
   h.probe={sg,cl:kk,m:mode,t:+base.toFixed(3),sd:+e.sd.toFixed(3),q:+q.toFixed(3),c:+c1.toFixed(3),L:+E._L.toFixed(2)};
-  if(pos>.82||pos>Math.max(q,c1)+.25&&pos>.55) return 0; // явный мусор не сдаём
+  if(pos>Math.max(.82,c1+.08)||pos>Math.max(q,c1)+.25&&pos>.55) return 0; // явный мусор не сдаём (у очень широких игроков граница сама в мусоре)
   // классы рук, которых у границы ещё мало, сдаём чаще
   let mn=1e9; for(const x of Object.values(e.cls)) if(x.avail&&x.near<mn) mn=x.near; const cb=mn<1e9?Math.max(.35,(1+mn)/(1+ec.near)):1;
   return cb*(.7*bandKeep(pos,c1)+.3*bandKeep(pos,q)); }
@@ -1496,7 +1498,7 @@ function recPick(h,d,seed,t,E,want){ const hh=h.players[h.hero].h, s0=sitOf(h,{d
   if(NATIVE_RANDOM()>=kw) return null;
   const probe=h.probe, P=gtoPath(seed,sg==='vs3b'); if(strict&&sg==='vs3b'&&!P.v3) return null;
   Math.random=seeded(seed); const r=setupHand(); H=r; run(r); // настоящая раздача с того же зерна
-  r.keepW=kw||1; r.seed=seed; r.cats=[...P.cats]; r.probe=probe; return r; }
+  r.keepW=kw||1; r.seed=seed; r.cats=[...P.cats]; r.probe=probe; if(strict) r.want=want; return r; }
 // повторы: 3 раза за тест та же раздача у границы (те же карты и действия до игрока, другие масти), чтобы проверить стабильность
 const REP_AT=[17,29,41];
 function repPick(E){ const k=RUN.hands.length; if(!REP_AT.includes(k)) return null;
@@ -1549,7 +1551,7 @@ function goBack(){ clearTimeout(ANIM); ANIM=null; FRAMES=[]; const cur=H, prev=R
 function replayPrev(){ const {cur,prev}=BACK; RUN.hands.pop();
   const idx=Math.min(prev.recIdx??RS.dec.length, cur.recIdx??RS.dec.length); RS.dec.splice(idx); RS.summary=null; RS.updated=Date.now();
   Math.random=seeded(prev.seed); SMAP=prev.smap||null; const h=setupHand(); SMAP=null; H=h; run(h); // дальше раздача идёт по тому же зерну, как в оригинале
-  h.smap=prev.smap; h.rep=prev.rep; h.seed=prev.seed; h.keepW=prev.keepW; h.probe=prev.probe; h.cats=prev.cats; h.replayed=true; h.backUsed=true;
+  h.smap=prev.smap; h.rep=prev.rep; h.want=prev.want; h.seed=prev.seed; h.keepW=prev.keepW; h.probe=prev.probe; h.cats=prev.cats; h.replayed=true; h.backUsed=true;
   BACK=null; IDLE=false; play(); updScore(); }
 
 // ---- итог профиля ----
@@ -1671,7 +1673,7 @@ function profAnalyze(run){
   const lo=rate(D.l,D.lo), ti=rate(D.t,D.to), pa=rate(D.p,D.po,.2), ag=rate(D.a,D.ao,.1);
   // ширина: и по доле отклонений на конкретных руках, и по оценённому VPIP относительно GTO
   const R=Vg?V/Vg:1;
-  const width= lo>.3&&ti>.3&&R>.7&&R<1.4?'mixed': (lo>=.2&&R>=2.2||lo>=.75&&R>=1.6)&&lo>ti?'wild': (lo>=.08&&(R>=1.35||lo>=.25)||R>=1.6)&&lo>=ti?'loose': R<=1.1&&ti>=lo&&(ti>=.3||ti>=.15&&R<=.8||ti>=.05&&R<=.65)?'tight':'ok';
+  const width= lo>.3&&ti>.3&&R>.7&&R<1.4?'mixed': (lo>=.2&&R>=2.2||lo>=.75&&R>=1.6)&&lo>ti?'wild': (lo>=.08&&(R>=1.35||lo>=.25)||R>=1.6)&&lo>=ti?'loose': (R<=.8&&ti>=lo||R<=1.1&&ti>=lo&&(ti>=.3||ti>=.15&&R<=.9))?'tight':'ok';
   const af=V?P/V:0, afG=Vg?Pg/Vg:0; // доля рейзов среди сыгранных рук: у игрока и по GTO
   const style= (pa>=.45&&pa>=ag||pa>=.3&&pa>ag+.2||af<.45&&afG-af>.25&&ag<.3)?'passive': ag>=.3&&ag>pa?'aggr':'bal';
   const NM={tight:{passive:'Камень (тайтово-пассивный)',bal:'Нит',aggr:'Нит, агрессивный'},
