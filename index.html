@@ -224,6 +224,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 @media(max-width:560px){.modesrow{flex-wrap:wrap}.modesrow #modes{flex-basis:100%}.rngtab{width:100%;padding:9px 14px}}
 .ranges{display:grid;gap:10px}
 .ranges[hidden]{display:none}
+.ranges .rngctl{justify-content:flex-start}
 .rnghide{display:none!important}
 .rnghint{margin:0;font-size:13px;color:var(--muted)}
 .rnglist{display:grid;border-top:1px solid var(--line)}
@@ -326,9 +327,9 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
   </div>
 
   <section class="ranges" id="ranges" hidden>
-    <div class="controls">
-      <label class="sizesel" for="rng-n">Стол <select id="rng-n"><option value="6">6-max</option><option value="7">7-max</option><option value="8">8-max</option><option value="9" selected>9-max</option><option value="10">10-max</option></select></label>
-      <label class="sizesel" for="rng-act">Действие <select id="rng-act"><option value="open" selected>Open</option><option value="3bbcall" disabled>3bb call</option><option value="3bb3bet" disabled>3bb 3bet</option></select></label>
+    <div class="controls rngctl">
+      <label class="sizesel" for="rng-n"><select id="rng-n" aria-label="Стол"><option value="6">6-max</option><option value="7">7-max</option><option value="8">8-max</option><option value="9" selected>9-max</option><option value="10">10-max</option></select></label>
+      <label class="sizesel" for="rng-act"><select id="rng-act" aria-label="Действие"><option value="open" selected>Open</option><option value="3bbcall" disabled>3bb call</option><option value="3bb3bet" disabled>3bb 3bet</option></select></label>
     </div>
     <p class="rnghint">GTO-диапазоны опена первым в банк, стеки 100 ББ. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.</p>
     <div class="rnglist" id="rng-list"></div>
