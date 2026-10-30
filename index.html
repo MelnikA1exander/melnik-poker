@@ -266,6 +266,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .pcards div.wide b{font:700 18px/1.25 var(--f-body)}
 .pcards span{font-size:12px;color:var(--muted)}
 .authbtn:disabled{opacity:.45;cursor:default}
+.sheetcard.confirm{max-width:380px;gap:10px}.sheetcard.confirm .decn{font-size:18px}.sheetcard.confirm .sub{color:var(--muted);font-size:14px}.cfbtns{display:flex;gap:8px;margin-top:6px}.cfbtns .authbtn{flex:1;padding:11px}
 .autherr{margin:0;font-size:13px;color:var(--bad);min-height:0}
 .autherr:empty{display:none}
 .pbody .pstats{grid-template-columns:repeat(2,1fr)}
@@ -288,7 +289,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 <div class="wrap" id="app" hidden>
   <header>
     <h1>Melnik Poker</h1>
-    <div class="hdr-r"><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Как это работает</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
+    <div class="hdr-r"><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
   </header>
 
   <div class="seg" id="modes">
@@ -1720,7 +1721,7 @@ const HELP_HTML=`
 function openHelp(){
   const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
   const card=document.createElement('div'); card.className='sheetcard help'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
-  card.innerHTML='<div class="sheethead"><div class="decn">Как это работает</div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div>'+HELP_HTML;
+  card.innerHTML='<div class="sheethead"><div class="decn">Справка</div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div>'+HELP_HTML;
   ov.appendChild(card); document.body.appendChild(ov);
   const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); }; card.querySelector('#sheet-close').onclick=close; card.querySelector('#sheet-close').focus({preventScroll:true});
 }
@@ -1783,7 +1784,17 @@ async function authSubmit(action){
 $('#authform').onsubmit=e=>{ e.preventDefault(); authSubmit(AMODE==='reg'?'register':'login'); };
 $('#abtn-reg').onclick=()=>{ if(AMODE==='reg') authSubmit('register'); else showAuth('reg'); };
 $('#abtn-back').onclick=()=>showAuth('login');
-$('#logout').onclick=()=>{ const t=AUTH&&AUTH.token; AUTH=null; try{ localStorage.removeItem(AKEY); }catch(e){} if(t) api('logout',{token:t}).catch(()=>{}); RUN=null; showAuth('login'); };
+function doLogout(){ const t=AUTH&&AUTH.token; AUTH=null; try{ localStorage.removeItem(AKEY); }catch(e){} if(t) api('logout',{token:t}).catch(()=>{}); RUN=null; showAuth('login'); }
+$('#logout').onclick=()=>{
+  const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
+  const card=document.createElement('div'); card.className='sheetcard confirm'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
+  card.innerHTML='<div class="decn">Выйти из аккаунта?</div><p class="sub">Войти снова можно с тем же логином и паролем, результаты останутся в профиле.</p><div class="cfbtns"><button class="authbtn secondary" id="cf-no" type="button">Отмена</button><button class="authbtn primary" id="cf-yes" type="button">Выйти</button></div>';
+  ov.appendChild(card); document.body.appendChild(ov);
+  const close=()=>{ ov.remove(); document.removeEventListener('keydown',esc); }; const esc=e=>{ if(e.key==='Escape') close(); };
+  document.addEventListener('keydown',esc); ov.onclick=e=>{ if(e.target===ov) close(); };
+  card.querySelector('#cf-no').onclick=close; card.querySelector('#cf-yes').onclick=()=>{ close(); doLogout(); };
+  card.querySelector('#cf-no').focus({preventScroll:true});
+};
 // «Профиль»: статистика по завершённым тестам без конкретных раздач, за последние 100 раздач или за всё время
 let PPER='last100';
 function openProfile(){
@@ -1806,12 +1817,12 @@ function openProfile(){
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{
-    if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); $('#logout').onclick(); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
+    if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); doLogout(); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
     R=r; st='ok'; draw(); }).catch(()=>{ st='err'; draw(); });
 }
 $('#score').onclick=e=>{ if(e.target.id==='profbtn') openProfile(); };
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
-if(AUTH){ showApp(); api('me',{token:AUTH.token}).then(r=>{ if(r&&r.ok===false&&r.error==='auth'){ $('#logout').onclick(); $('#autherr').textContent=AERR.auth; } }).catch(()=>{}); }
+if(AUTH){ showApp(); api('me',{token:AUTH.token}).then(r=>{ if(r&&r.ok===false&&r.error==='auth'){ doLogout(); $('#autherr').textContent=AERR.auth; } }).catch(()=>{}); }
 else showAuth('login');
 </script>
 
