@@ -258,6 +258,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .authcard h2{font:600 17px var(--f-body);margin:0}
 .authcard label{display:grid;gap:5px;font:600 13px var(--f-body);color:var(--muted)}
 .authcard input{font:500 16px var(--f-body);padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sunk);color:var(--ink);width:100%}
+.authcard input[aria-invalid="true"]{border-color:var(--raise);box-shadow:0 0 0 1px var(--raise)}
 .authbtn{font:700 16px var(--f-body);border:0;border-radius:12px;padding:13px;cursor:pointer;width:100%}
 .authbtn.primary{background:var(--raise);color:#fff}
 .authbtn.secondary{background:#fff;color:#13201A;border:1px solid var(--line)}
@@ -1744,6 +1745,11 @@ async function api(action,data){
 }
 const AERR={login_format:'Логин: от 2 до 25 символов.',password_format:'Пароль: от 4 до 25 символов.',login_taken:'Такой логин уже занят.',bad_credentials:'Неверный логин или пароль.',too_many:'Слишком много попыток. Подожди 15 минут.',auth:'Вход устарел, войди заново.'};
 let AMODE='login';
+// подсветка поля, к которому относится ошибка; фокус ставим туда же
+const AFIELD={login_format:['alogin'],login_taken:['alogin'],password_format:['apass'],bad_credentials:['alogin','apass']};
+function authErr(code,text){ $('#autherr').textContent=text||AERR[code]||'Не получилось. Попробуй ещё раз.';
+  const f=AFIELD[code]||[]; for(const id of ['alogin','apass']) $('#'+id).setAttribute('aria-invalid',f.includes(id)?'true':'false');
+  if(f.length) $('#'+f[0]).focus({preventScroll:true}); }
 function showAuth(mode){
   AMODE=mode||'login';
   $('#auth').hidden=false; $('#app').hidden=true;
@@ -1752,7 +1758,7 @@ function showAuth(mode){
   $('#abtn-login').hidden=reg; $('#abtn-back').hidden=!reg;
   $('#apass').autocomplete=reg?'new-password':'current-password';
   $('#apass').maxLength=reg?25:100; // старые пароли длиннее 25 должны входить
-  $('#autherr').textContent='';
+  authErr(null,' '); $('#autherr').textContent='';
   authUpd(); $('#alogin').focus({preventScroll:true});
 }
 function showApp(){
@@ -1761,16 +1767,16 @@ function showApp(){
   RUN=null; idle(); updScore();
 }
 function authUpd(){ const ok=$('#alogin').value.trim()&&$('#apass').value; $('#abtn-login').disabled=!ok; if(AMODE==='reg') $('#abtn-reg').disabled=!ok; else $('#abtn-reg').disabled=false; }
-$('#alogin').oninput=authUpd; $('#apass').oninput=authUpd;
+$('#alogin').oninput=$('#apass').oninput=e=>{ if(e.target.getAttribute('aria-invalid')==='true'){ e.target.setAttribute('aria-invalid','false'); if(!document.querySelector('.authcard [aria-invalid="true"]')) $('#autherr').textContent=''; } authUpd(); };
 let ABUSY=false;
 async function authSubmit(action){
   if(ABUSY) return; const login=$('#alogin').value.trim(), password=$('#apass').value; if(!login||!password) return;
   if(action==='register'){ const ll=[...login].length, pl=[...password].length;
-    if(ll<2||ll>25){ $('#autherr').textContent=AERR.login_format; return; } if(pl<4||pl>25){ $('#autherr').textContent=AERR.password_format; return; } }
+    if(ll<2||ll>25) return authErr('login_format'); if(pl<4||pl>25) return authErr('password_format'); }
   ABUSY=true; const btn=action==='register'?$('#abtn-reg'):$('#abtn-login'), txt=btn.textContent; btn.disabled=true; btn.textContent='Подождите…'; $('#autherr').textContent='';
   try{ const r=await api(action,{login,password});
     if(r&&r.ok){ AUTH={token:r.token,login:r.login}; try{ localStorage.setItem(AKEY,JSON.stringify(AUTH)); }catch(e){} $('#apass').value=''; showApp(); }
-    else $('#autherr').textContent=AERR[r&&r.error]||'Не получилось. Попробуй ещё раз.'; }
+    else authErr(r&&r.error); }
   catch(e){ $('#autherr').textContent='Нет связи с сервером. Проверь интернет и попробуй ещё раз.'; }
   finally{ ABUSY=false; btn.textContent=txt; authUpd(); }
 }
