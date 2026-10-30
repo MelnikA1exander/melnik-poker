@@ -44,6 +44,10 @@ h1 small{display:block;font:500 11px/1.4 var(--f-body);color:var(--muted);letter
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
 .seg button:disabled,.seg button.locked{cursor:not-allowed;opacity:.55}
 .soon{font:600 9px var(--f-body);text-transform:uppercase;letter-spacing:.06em;background:var(--line);color:var(--muted);padding:1px 5px;border-radius:4px}
+.wrap>*{min-width:0}
+#modes{overflow-x:auto;scrollbar-width:none}
+#modes::-webkit-scrollbar{display:none}
+.soon.beta{background:color-mix(in srgb,var(--chip) 30%,transparent);color:var(--ok);text-transform:none}
 .controls{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center}
 .controls .seg{flex:1 1 260px;min-width:0}
 .filters{display:flex;flex-wrap:wrap;gap:6px}
@@ -284,7 +288,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
   <div class="seg" id="modes">
     <button id="m-prof" aria-pressed="true">Профиль</button>
     <button id="m-pre" aria-pressed="false">Префлоп</button>
-    <button id="m-hand" aria-pressed="false">Полная раздача</button>
+    <button id="m-hand" aria-pressed="false" title="Бета: расчёты после флопа примерные">Полная раздача <span class="soon beta">beta</span></button>
     <button id="m-size" disabled title="Скоро">Сайзинг <span class="soon">скоро</span></button>
   </div>
 
