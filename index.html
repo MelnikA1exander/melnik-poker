@@ -302,8 +302,17 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .autherr:empty{display:none}
 .pbody .pstats{grid-template-columns:repeat(2,1fr)}
 .authback{justify-self:center;font-size:13px;color:var(--muted)}
-.themebtn{padding:6px 10px;line-height:1;min-width:36px}
+.themesw{position:relative;width:52px;height:28px;flex-shrink:0;border-radius:999px;border:1px solid var(--line);background:var(--sunk);cursor:pointer;padding:0;transition:background .25s,border-color .25s}
+.themesw .sw-knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .25s cubic-bezier(.3,.7,.4,1)}
+.themesw[aria-checked="true"] .sw-knob{transform:translateX(24px);background:var(--ink)}
+.themesw .sw-ic{position:absolute;top:50%;width:14px;height:14px;margin-top:-7px;background:var(--muted);transition:opacity .25s;
+  -webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+.themesw .sw-sun{left:31px;--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4.5'/%3E%3Cpath d='M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'/%3E%3C/svg%3E")}
+.themesw .sw-moon{left:7px;--m:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z'/%3E%3C/svg%3E")}
+.themesw[aria-checked="true"] .sw-sun,.themesw[aria-checked="false"] .sw-moon{opacity:0}
+:root.themeanim,:root.themeanim *:not(.sw-knob):not(.sw-ic){transition:background-color .3s,color .3s,border-color .3s!important}
 #restart{flex-shrink:0}
+.seg .inf{font:600 15px/1 var(--f-body);margin-left:-2px}
 #players:disabled{opacity:.5;cursor:not-allowed}
 .cfc{max-width:380px;gap:10px}.cfc .cft{font:700 18px var(--f-body)}.cfc p{color:var(--muted);font-size:14px;margin:0}
 .cfrow{display:flex;gap:8px;margin-top:6px}.cfrow button{flex:1;font:700 15px var(--f-body);border-radius:12px;padding:11px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
@@ -326,13 +335,13 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 <div class="wrap" id="app" hidden>
   <header>
     <h1>Melnik Poker</h1>
-    <div class="hdr-r"><div class="score" id="score"></div><button class="helpbtn themebtn" id="theme" type="button"></button><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
+    <div class="hdr-r"><button class="themesw" id="theme" type="button" role="switch"><i class="sw-ic sw-sun"></i><i class="sw-ic sw-moon"></i><b class="sw-knob"></b></button><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
   </header>
 
   <div class="modesrow">
   <div class="seg" id="modes">
     <button id="m-prof" aria-pressed="true">Профиль</button>
-    <button id="m-pre" aria-pressed="false">Префлоп</button>
+    <button id="m-pre" aria-pressed="false" title="Бесконечная тренировка">Префлоп <span class="inf" aria-hidden="true">∞</span></button>
     <button id="m-hand" aria-pressed="false" title="Бета: расчёты после флопа примерные">Полная раздача <span class="soon beta">beta</span></button>
     <button id="m-size" disabled title="Скоро">Сайзинг <span class="soon">скоро</span></button>
   </div>
@@ -1938,8 +1947,8 @@ function askConfirm(title,text,yes,cb){
 }
 $('#restart').onclick=()=>askConfirm('Начать тест заново?','Сыгранные раздачи этого теста не попадут в профиль. Потом можно выбрать другой стол.','Рестарт',()=>{ RUN=null; RS=null; idle(); updScore(); });
 const curTheme=()=>document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-function syncTheme(){ const d=curTheme()==='dark', b=$('#theme'); b.textContent=d?'☀':'☾'; b.title=b.ariaLabel=d?'Светлая тема':'Тёмная тема'; }
-$('#theme').onclick=()=>{ const t=curTheme()==='dark'?'light':'dark'; document.documentElement.dataset.theme=t; try{ localStorage.setItem('mp-theme',t); }catch(e){} syncTheme(); };
+function syncTheme(){ const d=curTheme()==='dark', b=$('#theme'); b.setAttribute('aria-checked',d); b.title=b.ariaLabel='Тёмная тема'; }
+$('#theme').onclick=()=>{ const t=curTheme()==='dark'?'light':'dark', R=document.documentElement; R.classList.add('themeanim'); R.dataset.theme=t; setTimeout(()=>R.classList.remove('themeanim'),350); try{ localStorage.setItem('mp-theme',t); }catch(e){} syncTheme(); };
 syncTheme();
 $('#players').onchange=e=>{ N=+e.target.value; save(); idle(); };
 document.addEventListener('keydown',e=>{
