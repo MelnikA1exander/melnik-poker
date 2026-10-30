@@ -228,10 +228,20 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .ranges .rngctl{justify-content:flex-start;flex-wrap:wrap}
 .ranges .anybtn{order:9;margin-left:auto;padding:6px 14px;width:auto}
 .anyrng{display:grid;gap:10px}.anyrng[hidden],.rnglist[hidden],.rnghint[hidden]{display:none}
-.anyhead{display:flex;align-items:center;gap:12px}
-.anyhead input{flex:1;accent-color:var(--orange)}
-.anyhead output{font:600 14px var(--f-mono);min-width:112px;text-align:right;color:var(--ink)}
-#any-grid .grid div{transition:background .12s}
+.anyhead{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px}
+.anyhead output{grid-column:1/-1;font:700 22px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--ink);text-align:center;white-space:nowrap;height:27px}
+.anyhead output{display:flex;justify-content:center;align-items:baseline;gap:8px}.anyhead output b{min-width:6ch;text-align:right}
+.anyhead output small{font:500 13px var(--f-mono);color:var(--muted);min-width:12ch;text-align:left}
+.sizesel[hidden]{display:none}
+.anystep{height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 22px/1 var(--f-body);cursor:pointer;touch-action:manipulation}
+.anyhead input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;margin:0;cursor:pointer;touch-action:pan-y}
+.anyhead input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:5px;background:linear-gradient(to right,var(--orange) var(--p,15%),var(--line) var(--p,15%))}
+.anyhead input[type=range]::-moz-range-track{height:10px;border-radius:5px;background:var(--line)}
+.anyhead input[type=range]::-moz-range-progress{height:10px;border-radius:5px;background:var(--orange)}
+.anyhead input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;margin-top:-10px;border-radius:50%;background:var(--surface);border:3px solid var(--orange);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.anyhead input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--surface);border:3px solid var(--orange);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+#any-grid .grid div{position:relative;overflow:hidden;isolation:isolate;transition:color .12s}
+#any-grid .grid div::before{content:'';position:absolute;left:0;right:0;bottom:0;height:calc(var(--q,0)*1%);background:var(--raise);z-index:-1;transition:height .12s}
 .rnghide{display:none!important}
 .rnghint{margin:0;font-size:13px;color:var(--muted)}
 .rnglist{display:grid;border-top:1px solid var(--line)}
@@ -358,7 +368,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
     <p class="rnghint" id="rng-hint">GTO-диапазоны опена первым в банк, стеки 100 ББ. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.</p>
     <div class="rnglist" id="rng-list"></div>
     <div class="anyrng" id="anyrng" hidden>
-      <div class="anyhead"><input type="range" id="any-sl" min="0" max="100" step="0.5" value="15" aria-label="Процент лучших рук"><output id="any-out"></output></div>
+      <div class="anyhead"><output id="any-out"></output><button type="button" class="anystep" id="any-m" aria-label="Меньше">−</button><input type="range" id="any-sl" min="0" max="100" step="0.5" value="15" aria-label="Процент лучших рук"><button type="button" class="anystep" id="any-p" aria-label="Больше">+</button></div>
       <div id="any-grid"></div>
     </div>
   </section>
@@ -2053,14 +2063,16 @@ function anyGrid(){ const g=document.createElement('div'); g.className='grid'; A
 function anyUpd(){ const pct=+$('#any-sl').value, need=pct/100*1326; let got=0;
   for(const hh of ANY_ORD){ const n=combos(hh), part=Math.max(0,Math.min(1,(need-got)/n)), e=ANYCELL[hh]; got+=n;
     const q=Math.round(part*100);
-    e.style.background=q>=100?'var(--raise)':q<=0?'':`linear-gradient(to top,var(--raise) ${q}%,var(--fold) ${q}%)`;
+    e.style.setProperty('--q',q);
     e.style.color=q>=60?'#fff':''; }
-  $('#any-out').textContent=`${String(pct).replace('.',',')}% · ${Math.round(need)} комбо`; }
+  $('#any-sl').style.setProperty('--p',pct+'%');
+  $('#any-out').innerHTML=`<b>${pct.toFixed(1).replace('.',',')}%</b><small>· ${Math.round(need)} комбо</small>`; }
 function anyMode(on){ ANYV=on; $('#rng-any').setAttribute('aria-pressed',on); $('#anyrng').hidden=!on;
   for(const id of ['rng-list','rng-hint']) $('#'+id).hidden=on;
   if(on){ if(!ANYCELL) anyGrid(); anyUpd(); } }
 $('#rng-any').onclick=()=>anyMode(!ANYV);
 $('#any-sl').oninput=anyUpd;
+for(const [id,dx] of [['any-m',-.5],['any-p',.5]]) $('#'+id).onclick=()=>{ const sl=$('#any-sl'); sl.value=Math.max(0,Math.min(100,+sl.value+dx)); anyUpd(); };
 for(const id of ['rng-n','rng-act']) $('#'+id).addEventListener('change',()=>anyMode(false));
 setMode('gto'); // по умолчанию всегда GTO
 setGame('prof');
