@@ -218,8 +218,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .hrow .sit{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hdet{display:grid;gap:10px;padding:4px 0 14px;border-bottom:1px solid var(--line)}
 .hdet[hidden]{display:none}
-.seg button.rngtab{color:var(--orange)}
-.seg button.rngtab[aria-pressed="true"]{background:var(--orange);color:#fff}
+.modesrow{display:flex;gap:8px;align-items:stretch}.modesrow #modes{flex:1;min-width:0}
+.rngtab{flex:0 0 auto;font:600 13px var(--f-body);border:1.5px solid var(--orange);background:var(--surface);color:var(--orange);border-radius:12px;padding:0 14px;cursor:pointer}
+.rngtab[aria-pressed="true"]{background:var(--orange);color:#fff}
 .ranges{display:grid;gap:10px}
 .ranges[hidden]{display:none}
 .rnghide{display:none!important}
@@ -311,12 +312,14 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
     <div class="hdr-r"><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
   </header>
 
+  <div class="modesrow">
   <div class="seg" id="modes">
     <button id="m-prof" aria-pressed="true">Профиль</button>
     <button id="m-pre" aria-pressed="false">Префлоп</button>
     <button id="m-hand" aria-pressed="false" title="Бета: расчёты после флопа примерные">Полная раздача <span class="soon beta">beta</span></button>
     <button id="m-size" disabled title="Скоро">Сайзинг <span class="soon">скоро</span></button>
-    <button id="m-rng" class="rngtab" aria-pressed="false">Диапазоны</button>
+  </div>
+  <button id="m-rng" class="rngtab" type="button" aria-pressed="false">Диапазоны</button>
   </div>
 
   <section class="ranges" id="ranges" hidden>
