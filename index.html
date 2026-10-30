@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <script>const ENDPOINT='https://script.google.com/macros/s/AKfycbwYRMRcedjndoBqofocJne57FwApUQE5Nol7S95NxUjUT2SGs-uVzckJA_4JYYauFCYEw/exec'; // URL веб-приложения Apps Script (…/exec). Пусто — результаты остаются только в браузере.</script>
-<title>Тренажёр домашней игры</title>
+<title>Melnik's Poker Coach</title>
 </head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400&family=Unbounded:wght@500;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
 <style>
 /* Layout: phone-first column. Header with modes, oval felt table with seats + 5 board slots, action bar under the table, verdict + range grid after answer. */
 :root{
@@ -237,12 +237,41 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
   .kbd{display:none}
 }
 @media (prefers-reduced-motion:no-preference){.verdict{animation:rise .2s ease-out}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
+/* ---- вход и регистрация ---- */
+.auth{min-height:calc(100vh - 56px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px 0}
+.auth[hidden],.wrap[hidden]{display:none}
+.brand{font:400 40px/1.1 "EB Garamond",Garamond,"Times New Roman",serif;font-style:normal;letter-spacing:.005em;text-align:center;margin:0;color:var(--ink)}
+.authcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;width:min(340px,100%);display:grid;gap:12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.authcard h2{font:600 17px var(--f-body);margin:0}
+.authcard label{display:grid;gap:5px;font:600 13px var(--f-body);color:var(--muted)}
+.authcard input{font:500 16px var(--f-body);padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sunk);color:var(--ink);width:100%}
+.authbtn{font:700 16px var(--f-body);border:0;border-radius:12px;padding:13px;cursor:pointer;width:100%}
+.authbtn.primary{background:var(--raise);color:#fff}
+.authbtn.secondary{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.authbtn:disabled{opacity:.45;cursor:default}
+.autherr{margin:0;font-size:13px;color:var(--bad);min-height:0}
+.autherr:empty{display:none}
+.pbody .pstats{grid-template-columns:repeat(2,1fr)}
+.authback{justify-self:center;font-size:13px;color:var(--muted)}
 </style>
 
-<div class="wrap">
+<section class="auth" id="auth" hidden>
+  <h1 class="brand">Melnik's Poker Coach</h1>
+  <form class="authcard" id="authform" novalidate>
+    <h2 id="authtitle">Вход</h2>
+    <label>Логин<input id="alogin" autocomplete="username" maxlength="24" autocapitalize="off" spellcheck="false"></label>
+    <label>Пароль<input id="apass" type="password" autocomplete="current-password" maxlength="100"></label>
+    <p class="autherr" id="autherr" role="alert"></p>
+    <button class="authbtn primary" id="abtn-login" type="submit" disabled>Вход</button>
+    <button class="authbtn secondary" id="abtn-reg" type="button">Регистрация</button>
+    <button class="linkbtn authback" id="abtn-back" type="button" hidden>У меня уже есть аккаунт</button>
+  </form>
+</section>
+
+<div class="wrap" id="app" hidden>
   <header>
     <h1>Тренажёр домашней игры</h1>
-    <div class="hdr-r"><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Как это работает</button></div>
+    <div class="hdr-r"><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Как это работает</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
   </header>
 
   <div class="seg" id="modes">
@@ -843,7 +872,7 @@ function renderEnd(){
 }
 
 // ===================== stats / filters =====================
-function updScore(){ if(REC){ $('#score').innerHTML=RUN?`${esc(RUN.name)} · раздача <b>${Math.min(PROF_N,RUN.hands.length+(H&&!H.over&&!IDLE?1:0))}/${PROF_N}</b>`:'Профиль игрока'; return; } $('#score').innerHTML=`Сессия <b>${session.pts}/${session.n*2}</b> · серия <b>${session.streak}</b>`; }
+function updScore(){ if(REC){ $('#score').innerHTML=RUN?`${esc(RUN.name)} · раздача <b>${Math.min(PROF_N,RUN.hands.length+(H&&!H.over&&!IDLE?1:0))}/${PROF_N}</b>`:'<button class="helpbtn" id="profbtn" type="button">Профиль</button>'; return; } $('#score').innerHTML=`Сессия <b>${session.pts}/${session.n*2}</b> · серия <b>${session.streak}</b>`; }
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 const FILTERS={all:'Все позиции',EP:'Ранние',MP:'Средние',LP:'Поздние',BL:'Блайнды'};
 function renderFilters(){
@@ -1370,7 +1399,7 @@ function recDecision(h,d,a,amt){
 let dbBusy=false, dbDirty=null;
 async function persist(rs){ dbDirty=rs; if(dbBusy) return; dbBusy=true;
   try{ while(dbDirty){ const x=dbDirty; dbDirty=null; if(!ENDPOINT){ DBST='local'; break; }
-      const body=JSON.stringify(x);
+      const body=JSON.stringify(AUTH?Object.assign({},x,{token:AUTH.token}):x);
       for(let k=0;k<3;k++){ try{ await fetch(ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body}); DBST='ok'; break; }
         catch(e){ DBST='local'; await new Promise(r=>setTimeout(r,1000*(k+1))); } } } }
   finally{ dbBusy=false; } }
@@ -1590,7 +1619,7 @@ function idle(){
   felt.appendChild(board); rail.appendChild(felt); t.appendChild(rail);
   if(REC&&(!RUN||RUN.hands.length>=PROF_N)){ const f=document.createElement('form'); f.className='namebox'; f.id='namebox';
     f.innerHTML=`<label for="pname">Кто играет?</label><input id="pname" maxlength="30" autocomplete="off" placeholder="Имя"><button type="submit" id="pgo">Начать ${PROF_N} раздач</button><p class="hint">Подсказок не будет до конца. В итоге тип игрока, разбор каждой раздачи и советы.</p>`;
-    t.appendChild(f); const inp=f.querySelector('#pname'), go=f.querySelector('#pgo'); inp.value=S.player||'';
+    t.appendChild(f); const inp=f.querySelector('#pname'), go=f.querySelector('#pgo'); inp.value=AUTH?AUTH.login:(S.player||''); if(AUTH){ inp.readOnly=true; f.querySelector('label').textContent='Играет'; }
     const upd=()=>{ go.disabled=!inp.value.trim(); }; upd(); inp.oninput=upd;
     f.onsubmit=e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v) return; startRun(v); next(); };
     $('#log').innerHTML='&nbsp;'; idlePanel(); updScore(); if(!S.player) inp.focus({preventScroll:true}); return; }
@@ -1684,6 +1713,76 @@ $('#m-hand').onclick=()=>{ setGame('hand'); idle(); };
 setMode('gto'); // по умолчанию всегда GTO
 setGame('prof');
 renderFilters(); updScore(); renderStats(); idle();
+
+// ===================== аккаунт =====================
+// Вход хранится в этом браузере (ключ входа в localStorage) 90 дней или до «Выйти».
+var AUTH=null;
+const AKEY='pc-auth';
+try{ const a=JSON.parse(localStorage.getItem(AKEY)||'null'); if(a&&a.token&&a.login) AUTH=a; }catch(e){}
+async function api(action,data){
+  if(!ENDPOINT) throw new Error('no endpoint');
+  const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({action},data))});
+  return r.json();
+}
+const AERR={login_format:'Логин: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.',password_format:'Пароль: не короче 4 символов.',login_taken:'Такой логин уже занят.',bad_credentials:'Неверный логин или пароль.',too_many:'Слишком много попыток. Подожди 15 минут.',auth:'Вход устарел, войди заново.'};
+let AMODE='login';
+function showAuth(mode){
+  AMODE=mode||'login';
+  $('#auth').hidden=false; $('#app').hidden=true;
+  const reg=AMODE==='reg';
+  $('#authtitle').textContent=reg?'Регистрация':'Вход';
+  $('#abtn-login').hidden=reg; $('#abtn-back').hidden=!reg;
+  $('#apass').autocomplete=reg?'new-password':'current-password';
+  $('#autherr').textContent='';
+  authUpd(); $('#alogin').focus({preventScroll:true});
+}
+function showApp(){
+  $('#auth').hidden=true; $('#app').hidden=false;
+  if(AUTH){ S.player=AUTH.login; save(); }
+  RUN=null; idle(); updScore();
+}
+function authUpd(){ const ok=$('#alogin').value.trim()&&$('#apass').value; $('#abtn-login').disabled=!ok; if(AMODE==='reg') $('#abtn-reg').disabled=!ok; else $('#abtn-reg').disabled=false; }
+$('#alogin').oninput=authUpd; $('#apass').oninput=authUpd;
+let ABUSY=false;
+async function authSubmit(action){
+  if(ABUSY) return; const login=$('#alogin').value.trim(), password=$('#apass').value; if(!login||!password) return;
+  ABUSY=true; const btn=action==='register'?$('#abtn-reg'):$('#abtn-login'), txt=btn.textContent; btn.disabled=true; btn.textContent='Подождите…'; $('#autherr').textContent='';
+  try{ const r=await api(action,{login,password});
+    if(r&&r.ok){ AUTH={token:r.token,login:r.login}; try{ localStorage.setItem(AKEY,JSON.stringify(AUTH)); }catch(e){} $('#apass').value=''; showApp(); }
+    else $('#autherr').textContent=AERR[r&&r.error]||'Не получилось. Попробуй ещё раз.'; }
+  catch(e){ $('#autherr').textContent='Нет связи с сервером. Проверь интернет и попробуй ещё раз.'; }
+  finally{ ABUSY=false; btn.textContent=txt; authUpd(); }
+}
+$('#authform').onsubmit=e=>{ e.preventDefault(); authSubmit(AMODE==='reg'?'register':'login'); };
+$('#abtn-reg').onclick=()=>{ if(AMODE==='reg') authSubmit('register'); else showAuth('reg'); };
+$('#abtn-back').onclick=()=>showAuth('login');
+$('#logout').onclick=()=>{ const t=AUTH&&AUTH.token; AUTH=null; try{ localStorage.removeItem(AKEY); }catch(e){} if(t) api('logout',{token:t}).catch(()=>{}); RUN=null; showAuth('login'); };
+// «Профиль»: статистика по завершённым тестам без конкретных раздач, за последние 100 раздач или за всё время
+let PPER='last100';
+function openProfile(){
+  const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
+  const card=document.createElement('div'); card.className='sheetcard'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
+  card.innerHTML='<div class="sheethead"><div><div class="decn">Профиль</div><div class="ctx"></div></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><div class="seg" id="pper"><button type="button" data-p="last100">Последние 100 раздач</button><button type="button" data-p="all">Всё время</button></div><div class="pbody"><p class="hint">Загружаю…</p></div>';
+  card.querySelector('.ctx').textContent=AUTH?AUTH.login:'';
+  ov.appendChild(card); document.body.appendChild(ov);
+  const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); }; card.querySelector('#sheet-close').onclick=close;
+  const body=card.querySelector('.pbody'), pct=v=>v==null?'—':v+'%'; let R=null;
+  const draw=()=>{ for(const b of card.querySelectorAll('#pper button')) b.setAttribute('aria-pressed',b.dataset.p===PPER);
+    if(!R) return; const T=R[PPER];
+    if(!T||!T.sessions){ body.innerHTML='<p>Пока нет завершённых тестов. Сыграй «Профиль» до конца, и здесь появится твоя статистика.</p>'; return; }
+    body.innerHTML=`<div class="res"><div><p class="ptype"></p><p class="psub"></p></div><div class="pstats"><div><b>${pct(T.gto)}</b><span>GTO</span></div><div><b>${pct(T.acc)}</b><span>правильных решений</span></div><div><b>${pct(T.vpip)}</b><span>VPIP</span></div><div><b>${pct(T.pfr)}</b><span>PFR</span></div></div></div>`;
+    body.querySelector('.ptype').textContent=T.type||'—';
+    body.querySelector('.psub').textContent=`Тип игрока · ${T.hands} раздач, тестов: ${T.sessions}`; };
+  for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
+  draw();
+  api('stats',{token:AUTH&&AUTH.token}).then(r=>{
+    if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); $('#logout').onclick(); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
+    R=r; draw(); }).catch(()=>{ body.innerHTML='<p>Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.</p>'; });
+}
+$('#score').onclick=e=>{ if(e.target.id==='profbtn') openProfile(); };
+// если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
+if(AUTH){ showApp(); api('me',{token:AUTH.token}).then(r=>{ if(r&&r.ok===false&&r.error==='auth'){ $('#logout').onclick(); $('#autherr').textContent=AERR.auth; } }).catch(()=>{}); }
+else showAuth('login');
 </script>
 
 </body></html>
