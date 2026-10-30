@@ -120,6 +120,7 @@ function logout_(x) {
 // ---------- сессии ----------
 function saveSession_(x) {
   if (!x || !x.id) return { ok: false, error: 'no id' };
+  if (/^pf/.test(String(x.id))) return { ok: false, error: 'preflop' }; // журнал «Префлопа» в «Сессии» не пишем
   // пока записываем только завершённые тесты «Профиля»
   if ((x.summary && x.summary.hands || (x.dec || []).length) < PROF_N) return { ok: false, error: 'unfinished' };
   const a = auth_(x.token);
@@ -168,7 +169,7 @@ function stats_(x) {
   if (!a) return { ok: false, error: 'auth' };
   const num = v => (v === '' || v == null || isNaN(+v)) ? null : +v;
   const list = rows_(sh_(SHEET, HEAD))
-    .filter(r => String(r[12]) === a.key && +r[4] >= PROF_N)
+    .filter(r => String(r[12]) === a.key && +r[4] >= PROF_N && !/^pf/.test(String(r[1]))) // pf… — журнал «Префлопа», попавший сюда со старой версией скрипта
     .map(r => {
       let sm = {}; try { sm = JSON.parse(r[10] || '{}'); } catch (e) {}
       return { date: r[3] ? new Date(r[3]).getTime() : new Date(r[0]).getTime(), hands: +r[4], type: String(r[5]),
