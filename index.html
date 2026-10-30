@@ -615,7 +615,7 @@ function heroAct(a,amt){
   h.decisions.push({d,c,a,amt:a==='R'?Math.min(STACK,amt):0,g,note,ctx,h:pl.h,pos:lab(h.hero),al:[...al],prof:REC});
   if(!REC){ session.n++; session.pts+=g; session.streak=g===2?session.streak+1:0;
   S.hist.push({m:MODE,k:d.kind,pos:lab(h.hero),h:pl.h,a,amt:amt||0,c,g,N,ts:Date.now()}); if(S.hist.length>1500) S.hist=S.hist.slice(-1500); save(); }
-  recDecision(h,d,a,amt);
+  recDecision(h,d,a,amt); pfDecision(h,d,a,amt);
   apply(h,h.hero,a,amt);
   if(!checkOver(h)) run(h);
   if(h.over) finishHand(h);
@@ -1421,9 +1421,18 @@ function recDecision(h,d,a,amt){
     open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,callers:d.level>=1?h.callers:null,
     cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
   RS.updated=Date.now(); }
-let dbBusy=false, dbDirty=null;
-async function persist(rs){ dbDirty=rs; if(dbBusy) return; dbBusy=true;
-  try{ while(dbDirty){ const x=dbDirty; dbDirty=null; if(!ENDPOINT){ DBST='local'; break; }
+// личный журнал «Префлопа»: пишется в отдельный лист базы, в статистику аккаунта не попадает
+let PS=null; const PS_MAX=200, PS_GAP=30*60*1000;
+function pfDecision(h,d,a,amt){
+  if(REC||GAME!=='pre'||!AUTH||!ENDPOINT||h.street>0) return;
+  const now=Date.now(); if(!PS||PS.dec.length>=PS_MAX||now-PS.updated>PS_GAP) PS={action:'preflop',id:'pf'+now.toString(36)+Math.random().toString(36).slice(2,6),started:now,updated:now,dec:[]};
+  const x=h.decisions[h.decisions.length-1], o=d.level>=1?h.raisers[0]:null;
+  PS.dec.push({t:now,m:MODE,N,pos:lab(h.hero),h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,
+    open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,toCall:d.toCall,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,g:x.g,ok:x.al});
+  PS.updated=now; persist(PS); }
+let dbBusy=false; const dbQ=new Map();
+async function persist(rs){ dbQ.set(rs.id,rs); if(dbBusy) return; dbBusy=true;
+  try{ while(dbQ.size){ const [qid,x]=dbQ.entries().next().value; dbQ.delete(qid); if(!ENDPOINT){ DBST='local'; break; }
       const body=JSON.stringify(AUTH?Object.assign({},x,{token:AUTH.token}):x);
       for(let k=0;k<3;k++){ try{ await fetch(ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body}); DBST='ok'; break; }
         catch(e){ DBST='local'; await new Promise(r=>setTimeout(r,1000*(k+1))); } } } }
@@ -1678,6 +1687,7 @@ const HELP_HTML=`
 <p>Тренажёр под нашу домашнюю игру: блайнды 2-4, стеки 500 (125 ББ), без рейка и анте, стол на 8–10 игроков. Все решения за тобой.</p>
 <h3>Режимы игры</h3>
 <ul>
+<li><b>Профиль</b> — режим по умолчанию: тест, который составляет профиль игрока. 50 префлоп-раздач без подсказок, соперники играют по GTO-чартам, решения оцениваются по GTO. Раздачи подбираются под игрока: сначала тренажёр сдаёт руки на краю широкого диапазона, а дальше сдвигает этот край к тому, как человек играет на самом деле. В каждом тесте есть минимум 6 спотов на 3-бет, 2 на 4-бет и 5 на колл рейза, явный мусор не сдаётся, сами карты честно берутся из перемешанной колоды. Над банком счётчик «Раздача k из 50». Можно вернуться на одну раздачу назад и один раз переиграть её. В конце: тип игрока (нит, TAG, LAG, фиш, колл-стейшн, маньяк и другие), соответствие GTO в процентах (сложные пограничные решения весят больше простых), как человек играл на конкретных руках, что исправить и таблица всех раздач с полным разбором. Тип считается относительно правильной игры на тех же руках: «вошёл в 30% банков, а правильно было в 18%» значит лузовый. Сохраняются только завершённые тесты.</li>
 <li><b>Префлоп</b> — раздача играется до флопа, разбор только префлоп-решений.</li>
 <li><b>Полная раздача</b> — раздача идёт до вскрытия: флоп, тёрн, ривер. Соперники за столом играют по модели (ниже), разбор по шагам на каждой улице. В индивидуальном режиме друзья играют постфлоп по своим профилям: станции коллируют шире и почти не блефуют, Зак ставит сам, когда попал, Тёма играет прямо и без чек-рейзов, Катя ставит непредсказуемым размером, Коля и Маша ставят почти только за вэлью. Правильный ответ учитывает эксплойты: против станций без блефов и добор крупнее, против нитов добор только сильными руками, а эквити считается против диапазона, суженного по профилю.</li>
 </ul>
@@ -1687,7 +1697,7 @@ const HELP_HTML=`
 <li>Размер рейза задаётся полем под кнопками: это сумма всей ставки («рейз до»). Есть − и +, ползунок и быстрые размеры.</li>
 <li>Если тебе ответили рейзом (3-бет, 4-бет, олл-ин), решение снова за тобой.</li>
 <li>Клавиши на компьютере: F фолд, X чек, C колл, R рейз выбранным размером, Enter — следующая раздача, Esc — закрыть окно.</li>
-<li>Фильтры сверху выбирают, с какой позиции тебе сдают: ранние, средние, поздние, блайнды.</li>
+<li>Список «Позиции» под режимами выбирает, с какой позиции тебе сдают: все, ранние, средние, поздние, блайнды. В «Профиле» позиции всегда все.</li>
 </ul>
 <h3>Режимы</h3>
 <ul>
@@ -1712,8 +1722,6 @@ const HELP_HTML=`
 <li>Размеры: ставка 1/3 банка на флопе (1/2 в мультипоте), 2/3 на тёрне, 3/4 на ривере; рейз ×3. Решения около порога засчитываются в обе стороны.</li>
 <li>Эквити считается симуляцией, погрешность 1–2%. В разборе на каждом шаге: борд, банк, нужное и твоё эквити, ответ модели и сетка диапазона соперника на этот момент.</li>
 </ul>
-<h3>Профиль</h3>
-<p>Режим для составления профиля игрока. Перед началом вводится имя, дальше 50 префлоп-раздач без подсказок. Соперники играют по GTO-чартам, без лимпов. Раздача подстраивается под игрока: сначала тренажёр считает его лузовым и сдаёт руки на краю широкого диапазона, а дальше после каждой раздачи сдвигает этот край к тому, как человек играет на самом деле (часть рук всегда на краю правильного диапазона). Оценка решений по GTO-чартам. Явные фолды и явные рейзы приходят реже, но сами карты честно сдаются из перемешанной колоды. В конце показываются тип игрока (нит, TAG, LAG, фиш, колл-стейшн, маньяк), главные ошибки с советами и таблица раздач. Любую раздачу можно развернуть и посмотреть полный разбор. Тип игрока считается относительно правильной игры на тех же руках: например, «вошёл в 30% банков, а правильно было в 18%» значит лузовый. Решения сохраняются под именем игрока.</p>
 <h3>Статистика</h3>
 <p>Точность по типам решений и позициям, последние ошибки. Хранится в этом браузере, на каждом устройстве своя.</p>
 <h3>Оговорки</h3>
@@ -1787,7 +1795,7 @@ async function authSubmit(action){
 $('#authform').onsubmit=e=>{ e.preventDefault(); authSubmit(AMODE==='reg'?'register':'login'); };
 $('#abtn-reg').onclick=()=>{ if(AMODE==='reg') authSubmit('register'); else showAuth('reg'); };
 $('#abtn-back').onclick=()=>showAuth('login');
-function doLogout(){ const t=AUTH&&AUTH.token; AUTH=null; try{ localStorage.removeItem(AKEY); }catch(e){} if(t) api('logout',{token:t}).catch(()=>{}); RUN=null; showAuth('login'); }
+function doLogout(){ const t=AUTH&&AUTH.token; AUTH=null; try{ localStorage.removeItem(AKEY); }catch(e){} if(t) api('logout',{token:t}).catch(()=>{}); RUN=null; PS=null; showAuth('login'); }
 $('#logout').onclick=()=>{
   const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
   const card=document.createElement('div'); card.className='sheetcard confirm'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
