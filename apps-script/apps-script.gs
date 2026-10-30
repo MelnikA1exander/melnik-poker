@@ -18,18 +18,47 @@ const SHEET = 'Сессии', ACC = 'Аккаунты', TOK = 'Входы', PF =
 const HEAD = ['Получено', 'ID', 'Имя', 'Начало', 'Раздач', 'Тип', 'VPIP', 'PFR', 'Лимпы', 'Точность', 'Итог (JSON)', 'Решения (JSON)', 'Аккаунт'];
 const ACC_HEAD = ['Логин', 'Ключ', 'Соль', 'Хеш', 'Создан', 'Последний вход'];
 const PF_HEAD = ['Получено', 'ID', 'Аккаунт', 'Начало', 'Решений', 'Верно %', 'Неверных', 'Решения (JSON)'];
-const HANDS_HEAD = ['Время', 'Аккаунт', 'Тест (ID)', 'Раздача №', 'Позиция', 'Рука', 'Карты', 'Ситуация', 'К коллу', 'Действие', 'Сумма', 'Правильно', 'Оценка', 'Что было до тебя'];
+// «Раздачи профиля» — указатель: 3 ячейки на решение. Ключ «аккаунт/тест/№ раздачи» ведёт к полной записи теста в «Сессиях».
+const HANDS_HEAD = ['Время', 'Ключ', 'Раздача'];
 const RECENT_HEAD = ['Время', 'Аккаунт', 'Источник', 'Тест / серия', 'Позиция', 'Рука', 'Карты', 'Ситуация', 'К коллу', 'Действие', 'Сумма', 'Правильно', 'Оценка', 'Данные (JSON)'];
 const RECENT_N = 300;
 const TOK_HEAD = ['Ключ входа', 'Аккаунт', 'Создан', 'Действует до'];
 const TOKEN_DAYS = 90, HASH_ROUNDS = 2000, PROF_N = 50;
 
+// Лимит Google Таблицы — 10 млн ячеек, и считаются все ячейки сетки, даже пустые.
+// Поэтому новый лист сразу обрезается до ширины заголовка и двух строк, а строки добавляются по мере записи.
 function sh_(name, head) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(name);
-  if (!sh) { sh = ss.insertSheet(name); sh.appendRow(head); sh.setFrozenRows(1); }
-  else if (sh.getLastColumn() < head.length) sh.getRange(1, 1, 1, head.length).setValues([head]);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, head.length).setValues([head]); sh.setFrozenRows(1);
+    fit_(sh, head.length);
+  } else if (sh.getLastColumn() < head.length) {
+    if (sh.getMaxColumns() < head.length) sh.insertColumnsAfter(sh.getMaxColumns(), head.length - sh.getMaxColumns());
+    sh.getRange(1, 1, 1, head.length).setValues([head]);
+  }
   return sh;
+}
+// убирает пустые строки и столбцы за пределами данных (оставляет минимум 2 строки)
+function fit_(sh, width) {
+  const w = Math.max(width || 1, sh.getLastColumn()), mc = sh.getMaxColumns();
+  if (mc > w) sh.deleteColumns(w + 1, mc - w);
+  const h = Math.max(2, sh.getLastRow()), mr = sh.getMaxRows();
+  if (mr > h) sh.deleteRows(h + 1, mr - h);
+}
+// дописывает строки в конец листа, при нехватке места сначала добавляет строки в сетку
+function append_(sh, rows) {
+  if (!rows.length) return;
+  const at = sh.getLastRow() + 1, need = at + rows.length - 1 - sh.getMaxRows();
+  if (need > 0) sh.insertRowsAfter(sh.getMaxRows(), need);
+  sh.getRange(at, 1, rows.length, rows[0].length).setValues(rows);
+}
+// записывает блок строк начиная со 2-й, расширяя сетку при нехватке места
+function put_(sh, rows, width) {
+  const need = 1 + rows.length - sh.getMaxRows();
+  if (need > 0) sh.insertRowsAfter(sh.getMaxRows(), need);
+  if (rows.length) sh.getRange(2, 1, rows.length, width).setValues(rows);
 }
 const rows_ = sh => sh.getLastRow() < 2 ? [] : sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
 
@@ -79,7 +108,7 @@ function findAcc_(k) {
 }
 function issue_(acc) {
   const t = rnd_(), now = new Date();
-  sh_(TOK, TOK_HEAD).appendRow([t, key_(acc.login), now, new Date(now.getTime() + TOKEN_DAYS * 864e5)]);
+  append_(sh_(TOK, TOK_HEAD), [[t, key_(acc.login), now, new Date(now.getTime() + TOKEN_DAYS * 864e5)]]);
   return t;
 }
 // не больше 8 неудачных попыток входа на логин за 15 минут
@@ -94,7 +123,7 @@ function register_(x) {
   if (pl < 4 || pl > 25) return { ok: false, error: 'password_format' };
   if (findAcc_(k)) return { ok: false, error: 'login_taken' };
   const salt = rnd_(), now = new Date();
-  sh_(ACC, ACC_HEAD).appendRow([login, k, salt, hash_(salt, pw), now, now]);
+  append_(sh_(ACC, ACC_HEAD), [[login, k, salt, hash_(salt, pw), now, now]]);
   const acc = { login };
   return { ok: true, token: issue_(acc), login };
 }
@@ -146,7 +175,7 @@ function saveSession_(x) {
   const ids = sh.getRange(1, 2, sh.getLastRow(), 1).getValues().map(r => String(r[0]));
   const at = ids.indexOf(String(x.id));
   if (at > 0) sh.getRange(at + 1, 1, 1, row.length).setValues([row]);
-  else { sh.appendRow(row); addHands_(String(x.id), a ? a.login : String(x.name || ''), dec); }
+  else { append_(sh, [row]); addHands_(String(x.id), a ? a.login : String(x.name || ''), dec); }
   if (a) updRecent_(a, String(x.id), 'Профиль', dec);
   return { ok: true };
 }
@@ -160,6 +189,9 @@ function actName_(a, d) {
   if (a === 'C') return d.k === 'open' ? 'Лимп' : 'Колл';
   return RNAME_[d.k] || 'Рейз';
 }
+// Одна раздача — одна строка из 3 ячеек: время, ключ «аккаунт/тест/№» и сама раздача текстом, например
+// «BTN AhKd (AKo) · Против рейза: UTG+1 14 · к коллу 14 → 3-бет 44 · GTO: 3-бет / Колл · ✓ · до: UTG+1 рейз 14 · UTG+2 колл».
+// ✓ — верно, ≈ — неточный размер, ✗ — ошибка. Полная запись решения со всеми полями — в «Сессиях», колонка «Решения (JSON)».
 function handRows_(id, login, dec) {
   let n = 0, prev = null;
   return dec.map(d => {
@@ -167,20 +199,19 @@ function handRows_(id, login, dec) {
     const key = (d.c || d.h) + '|' + d.pos;
     if (d.n) n = d.n; else if (key !== prev) n++;
     prev = key;
-    return [d.t ? new Date(d.t) : '', login, id, n, d.pos || '', d.h || '', d.c || '', SIT_[d.k] || d.k || '',
-      d.toCall || 0, actName_(d.a, d), d.a === 'R' ? d.amt || '' : '',
-      Array.isArray(d.ok) ? d.ok.map(a => actName_(a, d)).join(' / ') : '',
-      d.gr === 2 ? 'верно' : d.gr === 1 ? 'неточный размер' : d.gr === 0 ? 'ошибка' : '', String(d.ctx || '').slice(0, 300)];
+    const parts = [[d.pos, d.c, d.h && d.c ? '(' + d.h + ')' : d.h].filter(Boolean).join(' ')];
+    parts.push((SIT_[d.k] || d.k || '') + (d.opos ? ': ' + d.opos + (d.open ? ' ' + d.open : '') : '') + (d.lim ? ', лимперов ' + d.lim : ''));
+    parts.push((d.toCall ? 'к коллу ' + d.toCall + ' → ' : '→ ') + actName_(d.a, d) + (d.a === 'R' && d.amt ? ' ' + d.amt : ''));
+    if (Array.isArray(d.ok) && d.ok.length) parts.push('GTO: ' + d.ok.map(a => actName_(a, d)).join(' / '));
+    parts.push(d.gr === 2 ? '✓' : d.gr === 1 ? '≈' : d.gr === 0 ? '✗' : '?');
+    if (d.ctx) parts.push('до: ' + String(d.ctx).slice(0, 200));
+    return [d.t ? new Date(d.t) : '', login + '/' + id + '/' + n, parts.join(' · ')];
   });
 }
 function addHands_(id, login, dec) {
-  const rows = handRows_(id, login, dec || []);
-  if (!rows.length) return;
-  const sh = sh_(HANDS, HANDS_HEAD);
-  sh.getRange(sh.getLastRow() + 1, 1, rows.length, HANDS_HEAD.length).setValues(rows);
+  append_(sh_(HANDS, HANDS_HEAD), handRows_(id, login, dec || []));
 }
-// Запусти один раз вручную в редакторе (выбрать rebuildHands → Выполнить): пересобирает «Раздачи профиля»
-// из всех тестов в «Сессиях», включая сохранённые до появления этого листа. Повторный запуск безопасен.
+// Пересобирает «Раздачи профиля» из всех тестов в «Сессиях». Повторный запуск безопасен.
 function rebuildHands() {
   const all = [];
   rows_(sh_(SHEET, HEAD)).forEach(r => {
@@ -189,10 +220,29 @@ function rebuildHands() {
     handRows_(String(r[1]), String(r[2]), dec).forEach(x => all.push(x));
   });
   all.sort((p, q) => (p[0] ? +p[0] : 0) - (q[0] ? +q[0] : 0));
-  const sh = sh_(HANDS, HANDS_HEAD);
-  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
-  if (all.length) sh.getRange(2, 1, all.length, HANDS_HEAD.length).setValues(all);
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), old = ss.getSheetByName(HANDS);
+  if (old) ss.deleteSheet(old); // старый формат был шире — проще создать лист заново
+  append_(sh_(HANDS, HANDS_HEAD), all);
   return all.length;
+}
+
+// Запусти один раз вручную (compactStorage → Выполнить): переводит «Раздачи профиля» в формат 3 ячеек,
+// обрезает пустые строки и столбцы во всех листах, удаляет пустой «Sheet1»/«Лист1» и просроченные ключи входа.
+// Возвращает, сколько ячеек занято из 10 млн. Повторный запуск безопасен.
+function compactStorage() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  rebuildHands();
+  ['Sheet1', 'Лист1'].forEach(n => { const x = ss.getSheetByName(n); if (x && x.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(x); });
+  const tok = sh_(TOK, TOK_HEAD), now = Date.now(), tr = rows_(tok);
+  for (let i = tr.length - 1; i >= 0; i--) if (new Date(tr[i][3]).getTime() < now) tok.deleteRow(i + 2);
+  ss.getSheets().forEach(x => fit_(x, x.getLastColumn()));
+  const used = cellsUsed();
+  Logger.log('Занято ячеек: ' + used + ' из 10 000 000');
+  return used;
+}
+// сколько ячеек сетки занято во всей таблице (лимит Google — 10 000 000)
+function cellsUsed() {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheets().reduce((t, x) => t + x.getMaxRows() * x.getMaxColumns(), 0);
 }
 
 // журнал «Префлопа»: одна строка на серию раздач, повторная отправка того же id обновляет строку
@@ -211,7 +261,7 @@ function savePreflop_(x) {
   if (at > 0) {
     if (String(sh.getRange(at + 1, 3).getValue()) !== a.login) return { ok: false, error: 'owner' };
     sh.getRange(at + 1, 1, 1, row.length).setValues([row]);
-  } else sh.appendRow(row);
+  } else append_(sh, [row]);
   updRecent_(a, String(x.id), 'Префлоп', dec);
   return { ok: true };
 }
@@ -257,7 +307,7 @@ function updRecent_(a, id, src, dec) {
   mine.sort((p, q) => tm(p) - tm(q));
   const out = others.concat(mine.slice(-RECENT_N));
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
-  if (out.length) sh.getRange(2, 1, out.length, W).setValues(out);
+  put_(sh, out, W);
 }
 function history_(x) {
   const a = auth_(x.token);
@@ -281,7 +331,10 @@ function stats_(x) {
   const a = auth_(x.token);
   if (!a) return { ok: false, error: 'auth' };
   const num = v => (v === '' || v == null || isNaN(+v)) ? null : +v;
-  const list = rows_(sh_(SHEET, HEAD))
+  // колонку «Решения (JSON)» (самую тяжёлую) не читаем: берём A:K и аккаунт из M
+  const sh = sh_(SHEET, HEAD), cnt = sh.getLastRow() - 1;
+  const base = cnt > 0 ? sh.getRange(2, 1, cnt, 11).getValues() : [], accs = cnt > 0 ? sh.getRange(2, 13, cnt, 1).getValues() : [];
+  const list = base.map((r, i) => r.concat(['', accs[i][0]]))
     .filter(r => String(r[12]) === a.key && +r[4] >= PROF_N && !/^pf/.test(String(r[1]))) // pf… — журнал «Префлопа», попавший сюда со старой версией скрипта
     .map(r => {
       let sm = {}; try { sm = JSON.parse(r[10] || '{}'); } catch (e) {}
