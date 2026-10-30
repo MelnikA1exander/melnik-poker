@@ -14,7 +14,7 @@
 :root{
   --bg:#E8EDEA; --surface:#FFFFFF; --sunk:#F2F5F3; --ink:#13201A; --muted:#5A6A62; --line:#D2DBD6;
   --felt:#1C5A43; --felt-2:#27705A; --rail:#2B2118; --felt-ink:#EAF5EF; --chip:#D09A2C;
-  --raise:#C9502F; --call:#2E8A57; --fold:#E3E8E5; --mix:#C9962B;
+  --raise:#C9502F; --orange:#D9771A; --call:#2E8A57; --fold:#E3E8E5; --mix:#C9962B;
   --good:#1E8A4C; --good-bg:#E1F2E7; --ok:#9A6400; --ok-bg:#FAEFD6; --bad:#B53A2E; --bad-bg:#F8E2DF;
   --card:#FFFFFF; --s-red:#C8322A; --s-blue:#2659B8; --s-green:#1F7A3E; --s-black:#1A1A1A;
   --f-display:"Unbounded","Onest",system-ui,sans-serif;
@@ -24,13 +24,13 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0E1512; --surface:#16201B; --sunk:#111915; --ink:#E4EDE8; --muted:#93A49B; --line:#29372F;
   --felt:#15402F; --felt-2:#1D5240; --rail:#1C150F; --felt-ink:#E3F2EA; --chip:#DCAA45;
-  --raise:#E06A47; --call:#4CB57A; --fold:#25312B; --mix:#D9A940;
+  --raise:#E06A47; --orange:#EE9440; --call:#4CB57A; --fold:#25312B; --mix:#D9A940;
   --good:#5CC98A; --good-bg:#15301F; --ok:#E2B04F; --ok-bg:#33280F; --bad:#EE7B6E; --bad-bg:#3A1A16;
   --card:#F3F3EF; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0E1512; --surface:#16201B; --sunk:#111915; --ink:#E4EDE8; --muted:#93A49B; --line:#29372F;
   --felt:#15402F; --felt-2:#1D5240; --rail:#1C150F; --felt-ink:#E3F2EA; --chip:#DCAA45;
-  --raise:#E06A47; --call:#4CB57A; --fold:#25312B; --mix:#D9A940;
+  --raise:#E06A47; --orange:#EE9440; --call:#4CB57A; --fold:#25312B; --mix:#D9A940;
   --good:#5CC98A; --good-bg:#15301F; --ok:#E2B04F; --ok-bg:#33280F; --bad:#EE7B6E; --bad-bg:#3A1A16;
   --card:#F3F3EF; color-scheme:dark}
 *{box-sizing:border-box}
@@ -218,6 +218,21 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .hrow .sit{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hdet{display:grid;gap:10px;padding:4px 0 14px;border-bottom:1px solid var(--line)}
 .hdet[hidden]{display:none}
+.seg button.rngtab{color:var(--orange)}
+.seg button.rngtab[aria-pressed="true"]{background:var(--orange);color:#fff}
+.ranges{display:grid;gap:10px}
+.ranges[hidden]{display:none}
+.rnghide{display:none!important}
+.rnghint{margin:0;font-size:13px;color:var(--muted)}
+.rnglist{display:grid;border-top:1px solid var(--line)}
+.rrow{display:grid;grid-template-columns:70px 1fr 14px;gap:8px;align-items:center;text-align:left;font:500 14px var(--f-body);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line);padding:12px 6px;cursor:pointer;width:100%}
+.rrow:hover,.rrow[aria-expanded="true"]{background:var(--sunk)}
+.rrow b{font:700 14px var(--f-mono)}
+.rrow .pct{color:var(--muted);font-size:13px}
+.rrow .chev{color:var(--muted);font-size:12px;transition:transform .15s}
+.rrow[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.rdet{padding:8px 0 14px;border-bottom:1px solid var(--line);overflow-x:auto}
+.rdet[hidden]{display:none}
 .linkbtn{background:none;border:0;color:inherit;text-decoration:underline;font:inherit;cursor:pointer;padding:0}
 .whoon{position:absolute;left:50%;top:calc(50% + 40px);transform:translateX(-50%);z-index:5;font-size:13px;color:#fff;opacity:.85;white-space:nowrap}
 .next{font:700 15px var(--f-body);background:var(--ink);color:var(--bg);border:0;border-radius:12px;padding:13px;cursor:pointer;width:100%}
@@ -301,7 +316,17 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
     <button id="m-pre" aria-pressed="false">Префлоп</button>
     <button id="m-hand" aria-pressed="false" title="Бета: расчёты после флопа примерные">Полная раздача <span class="soon beta">beta</span></button>
     <button id="m-size" disabled title="Скоро">Сайзинг <span class="soon">скоро</span></button>
+    <button id="m-rng" class="rngtab" aria-pressed="false">Диапазоны</button>
   </div>
+
+  <section class="ranges" id="ranges" hidden>
+    <div class="controls">
+      <label class="sizesel" for="rng-n">Стол <select id="rng-n"><option value="6" disabled>6-max</option><option value="7" disabled>7-max</option><option value="8" disabled>8-max</option><option value="9" selected>9-max</option><option value="10" disabled>10-max</option></select></label>
+      <label class="sizesel" for="rng-act">Действие <select id="rng-act"><option value="open" selected>Open</option><option value="3bbcall" disabled>3bb call</option><option value="3bb3bet" disabled>3bb 3bet</option></select></label>
+    </div>
+    <p class="rnghint">GTO-диапазоны опена первым в банк. Разверни позицию, чтобы увидеть таблицу рук.</p>
+    <div class="rnglist" id="rng-list"></div>
+  </section>
 
   <div class="controls">
     <div class="seg" id="style">
@@ -1349,7 +1374,7 @@ function postBlock(h,x,i){
   lg.innerHTML='<span><i style="background:var(--raise)"></i>в диапазоне</span><span><i class="lgp"></i>частично</span><span><i style="background:var(--fold);border:1px solid var(--line)"></i>нет</span>';
   w.append(cap,wGrid(x.snap,null),lg); b.appendChild(w); return b;
 }
-function setGame(g){
+function setGame(g){ showRanges(false);
   if(g==='prof'&&!REC){ SAVEDF=filter; filter='all'; } else if(g!=='prof'&&REC){ filter=SAVEDF; }
   GAME=g; REC=g==='prof'; MODE=REC?'gto':STYLE; $('#m-prof').setAttribute('aria-pressed',g==='prof'); $('#m-pre').setAttribute('aria-pressed',g==='pre'); $('#m-hand').setAttribute('aria-pressed',g==='hand');
   $('#style').classList.toggle('hide',REC); $('#filters').classList.toggle('hide',REC); updScore();
@@ -1779,6 +1804,7 @@ $('#players').value=String(N);
 $('#players').onchange=e=>{ N=+e.target.value; save(); idle(); };
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if(RNGV&&!document.getElementById('sheet')) return; // во вкладке «Диапазоны» горячие клавиши стола не работают
   if(document.getElementById('app').hidden) return;
   const k=e.key.toLowerCase();
   const sh=document.getElementById('sheet'); if(sh){ if(k==='escape'||k==='enter'){ e.preventDefault(); sh.remove(); } return; }
@@ -1837,6 +1863,28 @@ $('#s-ind').onclick=()=>{ const b=$('#s-ind');
 $('#m-prof').onclick=()=>{ setGame('prof'); idle(); };
 $('#m-pre').onclick=()=>{ setGame('pre'); idle(); };
 $('#m-hand').onclick=()=>{ setGame('hand'); idle(); };
+// ---- вкладка «Диапазоны»: справочник GTO-чартов, стол и раздача в это время скрыты ----
+let RNGV=false;
+const RNG_HIDE=['.controls:not(.ranges .controls)','#table','#log','#panel','#stats'];
+function showRanges(on){ RNGV=on; $('#ranges').hidden=!on;
+  for(const q of RNG_HIDE) document.querySelectorAll(q).forEach(e=>e.classList.toggle('rnghide',on));
+  $('#m-rng').setAttribute('aria-pressed',on);
+  if(on){ for(const id of ['m-prof','m-pre','m-hand']) $('#'+id).setAttribute('aria-pressed',false); renderRanges(); }
+  else { $('#m-prof').setAttribute('aria-pressed',GAME==='prof'); $('#m-pre').setAttribute('aria-pressed',GAME==='pre'); $('#m-hand').setAttribute('aria-pressed',GAME==='hand'); } }
+function rngCharts(n,act){ // [{pos, ch}] по местам за столом; пока только опен
+  const L=LABELS[n], out=[];
+  for(let i=0;i<n-1;i++) out.push({pos:L[i],ch:i===n-2?RFI.SB:RFI[Math.min(6,(n-3)-i)]});
+  return out; }
+function rngPct(ch){ let c=0; for(const hh of ALL169){ const k=cls(ch,hh); c+=combos(hh)*(k==='R'?1:k==='F'?0:.5); } return Math.round(c/1326*100); }
+function renderRanges(){ const box=$('#rng-list'); box.innerHTML='';
+  for(const {pos,ch} of rngCharts(+$('#rng-n').value,$('#rng-act').value)){
+    const b=document.createElement('button'); b.type='button'; b.className='rrow'; b.setAttribute('aria-expanded','false');
+    b.innerHTML=`<b></b><span class="pct">≈ ${rngPct(ch)}% рук в опен</span><span class="chev">▾</span>`; b.querySelector('b').textContent=pos;
+    const det=document.createElement('div'); det.className='rdet'; det.hidden=true;
+    b.onclick=()=>{ const open=det.hidden; if(open&&!det.firstChild) det.appendChild(gridEl({d:{ch,kind:'open'},h:null})); det.hidden=!open; b.setAttribute('aria-expanded',open); };
+    box.append(b,det); } }
+$('#rng-n').onchange=$('#rng-act').onchange=renderRanges; // смена параметров сворачивает все строки
+$('#m-rng').onclick=()=>showRanges(true);
 setMode('gto'); // по умолчанию всегда GTO
 setGame('prof');
 renderFilters(); updScore(); renderStats(); idle();
