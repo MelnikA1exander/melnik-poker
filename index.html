@@ -221,6 +221,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .modesrow{display:flex;gap:8px;align-items:stretch}.modesrow #modes{flex:1;min-width:0}
 .rngtab{flex:0 0 auto;font:600 13px var(--f-body);border:1.5px solid var(--orange);background:var(--surface);color:var(--orange);border-radius:12px;padding:0 14px;cursor:pointer}
 .rngtab[aria-pressed="true"]{background:var(--orange);color:#fff}
+@media(max-width:560px){.modesrow{flex-wrap:wrap}.modesrow #modes{flex-basis:100%}.rngtab{width:100%;padding:9px 14px}}
 .ranges{display:grid;gap:10px}
 .ranges[hidden]{display:none}
 .rnghide{display:none!important}
