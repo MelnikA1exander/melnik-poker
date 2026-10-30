@@ -233,6 +233,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .anyhead output{display:flex;justify-content:center;align-items:baseline;gap:8px}.anyhead output b{min-width:6ch;text-align:right}
 .anyhead output small{font:500 13px var(--f-mono);color:var(--muted);min-width:12ch;text-align:left}
 .sizesel[hidden]{display:none}
+.sizesel select:disabled{opacity:.45;cursor:not-allowed}
 .anystep{height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 22px/1 var(--f-body);cursor:pointer;touch-action:manipulation}
 .anyhead input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;margin:0;cursor:pointer;touch-action:pan-y}
 .anyhead input[type=range]::-webkit-slider-runnable-track{height:10px;border-radius:5px;background:linear-gradient(to right,var(--orange) var(--p,15%),var(--line) var(--p,15%))}
@@ -2069,6 +2070,7 @@ function anyUpd(){ const pct=+$('#any-sl').value, need=pct/100*1326; let got=0;
   $('#any-out').innerHTML=`<b>${pct.toFixed(1).replace('.',',')}%</b><small>· ${Math.round(need)} комбо</small>`; }
 function anyMode(on){ ANYV=on; $('#rng-any').setAttribute('aria-pressed',on); $('#anyrng').hidden=!on;
   for(const id of ['rng-list','rng-hint']) $('#'+id).hidden=on;
+  for(const id of ['rng-n','rng-act','rng-op']) $('#'+id).disabled=on; // в Any range стол и действие не участвуют
   if(on){ if(!ANYCELL) anyGrid(); anyUpd(); } }
 $('#rng-any').onclick=()=>anyMode(!ANYV);
 $('#any-sl').oninput=anyUpd;
