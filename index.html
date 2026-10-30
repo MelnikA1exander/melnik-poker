@@ -51,6 +51,12 @@ h1 small{display:block;font:500 11px/1.4 var(--f-body);color:var(--muted);letter
 .controls{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center}
 .controls .seg{flex:1 1 260px;min-width:0}
 .filters{display:flex;flex-wrap:wrap;gap:6px}
+.controls{min-height:38px;flex-wrap:nowrap}
+.controls .sizesel{flex-shrink:0}.controls .seg{flex:0 1 auto}.controls .seg button{flex:0 0 auto;padding:8px 10px}
+@media(max-width:460px){.controls .soon{display:none}}
+.ctl2{min-height:30px}
+.sessline{text-align:right;overflow:hidden;text-overflow:ellipsis}
+.hide{visibility:hidden}
 .chipf{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:5px 11px;border-radius:999px;cursor:pointer}
 .chipf[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .sizesel{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
@@ -302,7 +308,10 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
     </label>
   </div>
 
-  <div class="filters" id="filters"></div>
+  <div class="controls ctl2">
+    <label class="sizesel" for="posf" id="filters">Позиции <select id="posf"></select></label>
+    <div class="score sessline" id="sessline"></div>
+  </div>
 
   <div class="table-wrap" id="table"></div>
   <div class="log" id="log"></div>
@@ -883,13 +892,14 @@ function renderEnd(){
 }
 
 // ===================== stats / filters =====================
-function updScore(){ if(REC){ $('#score').innerHTML=RUN?`${esc(RUN.name)} · раздача <b>${Math.min(PROF_N,RUN.hands.length+(H&&!H.over&&!IDLE?1:0))}/${PROF_N}</b>`:'<button class="helpbtn" id="profbtn" type="button">Профиль</button>'; return; } $('#score').innerHTML=`Сессия <b>${session.pts}/${session.n*2}</b> · серия <b>${session.streak}</b>`; }
+function updScore(){ $('#score').innerHTML='<button class="helpbtn" id="profbtn" type="button">Профиль</button>'; // шапка одинаковая на всех вкладках
+  $('#sessline').innerHTML= REC ? (RUN?`${esc(RUN.name)} · раздача <b>${Math.min(PROF_N,RUN.hands.length+(H&&!H.over&&!IDLE?1:0))}/${PROF_N}</b>`:'') : `Сессия <b>${session.pts}/${session.n*2}</b> · серия <b>${session.streak}</b>`; }
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 const FILTERS={all:'Все позиции',EP:'Ранние',MP:'Средние',LP:'Поздние',BL:'Блайнды'};
 function renderFilters(){
-  const f=$('#filters'); f.innerHTML='';
-  for(const [k,v] of Object.entries(FILTERS)){ const b=document.createElement('button'); b.className='chipf'; b.id='f-'+k; b.textContent=v; b.setAttribute('aria-pressed',k===filter);
-    b.onclick=()=>{ filter=k; renderFilters(); idle(); }; f.appendChild(b); }
+  const f=$('#posf'); f.innerHTML='';
+  for(const [k,v] of Object.entries(FILTERS)){ const o=document.createElement('option'); o.value=k; o.textContent=v; if(k===filter) o.selected=true; f.appendChild(o); }
+  f.onchange=()=>{ filter=f.value; idle(); };
 }
 function recBlock(){ const box=document.createElement('div'); box.className='hint'; box.style.margin='10px 0 0';
   const byName={}; for(const r of S.recs||[]) byName[r.name]=(byName[r.name]||0)+r.dec.length;
@@ -1335,7 +1345,7 @@ function postBlock(h,x,i){
 function setGame(g){
   if(g==='prof'&&!REC){ SAVEDF=filter; filter='all'; } else if(g!=='prof'&&REC){ filter=SAVEDF; }
   GAME=g; REC=g==='prof'; MODE=REC?'gto':STYLE; $('#m-prof').setAttribute('aria-pressed',g==='prof'); $('#m-pre').setAttribute('aria-pressed',g==='pre'); $('#m-hand').setAttribute('aria-pressed',g==='hand');
-  $('#style').style.display=REC?'none':''; $('#filters').style.display=REC?'none':''; updScore();
+  $('#style').classList.toggle('hide',REC); $('#filters').classList.toggle('hide',REC); updScore();
 
 }
 
