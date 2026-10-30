@@ -1,4 +1,4 @@
-// Бэкенд тренажёра Melnik's Poker Coach на Google Таблице.
+// Бэкенд тренажёра Melnik Poker на Google Таблице.
 // Листы создаются сами: «Сессии» (результаты), «Аккаунты» (логин, соль, хеш пароля), «Входы» (ключи входа).
 // Все запросы — POST с JSON в теле (Content-Type: text/plain). Поле action выбирает действие:
 //   register {login, password}       → {ok, token, login}
