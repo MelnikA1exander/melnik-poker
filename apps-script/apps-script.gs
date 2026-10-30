@@ -81,8 +81,10 @@ function fail_(k) { const c = CacheService.getScriptCache(), n = +(c.get('fail:'
 
 function register_(x) {
   const login = String(x.login || '').trim(), k = key_(login), pw = String(x.password || '');
-  if (!/^[\p{L}\p{N}_.\- ]{2,24}$/u.test(login)) return { ok: false, error: 'login_format' };
-  if (pw.length < 4 || pw.length > 100) return { ok: false, error: 'password_format' };
+  // требования только к длине: логин 2–25 символов, пароль 4–25
+  const ll = [...login].length, pl = [...pw].length;
+  if (ll < 2 || ll > 25) return { ok: false, error: 'login_format' };
+  if (pl < 4 || pl > 25) return { ok: false, error: 'password_format' };
   if (findAcc_(k)) return { ok: false, error: 'login_taken' };
   const salt = rnd_(), now = new Date();
   sh_(ACC, ACC_HEAD).appendRow([login, k, salt, hash_(salt, pw), now, now]);

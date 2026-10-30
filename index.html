@@ -280,8 +280,8 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
   <h1 class="brand">Melnik Poker</h1>
   <form class="authcard" id="authform" novalidate>
     <h2 id="authtitle">Вход</h2>
-    <label>Логин<input id="alogin" autocomplete="username" maxlength="24" autocapitalize="off" spellcheck="false"></label>
-    <label>Пароль<input id="apass" type="password" autocomplete="current-password" maxlength="100"></label>
+    <label>Логин<input id="alogin" autocomplete="username" maxlength="25" autocapitalize="off" spellcheck="false"></label>
+    <label>Пароль<input id="apass" type="password" autocomplete="current-password" maxlength="25"></label>
     <p class="autherr" id="autherr" role="alert"></p>
     <button class="authbtn secondary" id="abtn-login" type="submit" disabled>Вход</button>
     <button class="authbtn primary" id="abtn-reg" type="button">Регистрация</button>
@@ -1742,7 +1742,7 @@ async function api(action,data){
   const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({action},data))});
   return r.json();
 }
-const AERR={login_format:'Логин: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.',password_format:'Пароль: не короче 4 символов.',login_taken:'Такой логин уже занят.',bad_credentials:'Неверный логин или пароль.',too_many:'Слишком много попыток. Подожди 15 минут.',auth:'Вход устарел, войди заново.'};
+const AERR={login_format:'Логин: от 2 до 25 символов.',password_format:'Пароль: от 4 до 25 символов.',login_taken:'Такой логин уже занят.',bad_credentials:'Неверный логин или пароль.',too_many:'Слишком много попыток. Подожди 15 минут.',auth:'Вход устарел, войди заново.'};
 let AMODE='login';
 function showAuth(mode){
   AMODE=mode||'login';
@@ -1751,6 +1751,7 @@ function showAuth(mode){
   $('#authtitle').textContent=reg?'Регистрация':'Вход';
   $('#abtn-login').hidden=reg; $('#abtn-back').hidden=!reg;
   $('#apass').autocomplete=reg?'new-password':'current-password';
+  $('#apass').maxLength=reg?25:100; // старые пароли длиннее 25 должны входить
   $('#autherr').textContent='';
   authUpd(); $('#alogin').focus({preventScroll:true});
 }
@@ -1764,6 +1765,8 @@ $('#alogin').oninput=authUpd; $('#apass').oninput=authUpd;
 let ABUSY=false;
 async function authSubmit(action){
   if(ABUSY) return; const login=$('#alogin').value.trim(), password=$('#apass').value; if(!login||!password) return;
+  if(action==='register'){ const ll=[...login].length, pl=[...password].length;
+    if(ll<2||ll>25){ $('#autherr').textContent=AERR.login_format; return; } if(pl<4||pl>25){ $('#autherr').textContent=AERR.password_format; return; } }
   ABUSY=true; const btn=action==='register'?$('#abtn-reg'):$('#abtn-login'), txt=btn.textContent; btn.disabled=true; btn.textContent='Подождите…'; $('#autherr').textContent='';
   try{ const r=await api(action,{login,password});
     if(r&&r.ok){ AUTH={token:r.token,login:r.login}; try{ localStorage.setItem(AKEY,JSON.stringify(AUTH)); }catch(e){} $('#apass').value=''; showApp(); }
