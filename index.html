@@ -1617,9 +1617,14 @@ function idle(){
   const board=document.createElement('div'); board.className='board'; for(let i=0;i<5;i++) board.appendChild(cardEl(null));
   if(REC&&RUN&&RUN.hands.length<PROF_N) felt.appendChild(progEl(RUN.hands.length));
   felt.appendChild(board); rail.appendChild(felt); t.appendChild(rail);
+  if(REC&&AUTH&&(!RUN||RUN.hands.length>=PROF_N)){ // с аккаунтом имя не спрашиваем: играет владелец аккаунта
+    const b=document.createElement('button'); b.className='startbtn'; b.id='start'; b.type='button'; b.textContent=`Начать ${PROF_N} раздач`;
+    b.onclick=()=>{ startRun(AUTH.login); next(); }; t.appendChild(b);
+    const w=document.createElement('div'); w.className='whoon'; w.textContent=`Играет: ${AUTH.login}`; t.appendChild(w);
+    $('#log').innerHTML='&nbsp;'; idlePanel(); updScore(); b.focus({preventScroll:true}); return; }
   if(REC&&(!RUN||RUN.hands.length>=PROF_N)){ const f=document.createElement('form'); f.className='namebox'; f.id='namebox';
     f.innerHTML=`<label for="pname">Кто играет?</label><input id="pname" maxlength="30" autocomplete="off" placeholder="Имя"><button type="submit" id="pgo">Начать ${PROF_N} раздач</button><p class="hint">Подсказок не будет до конца. В итоге тип игрока, разбор каждой раздачи и советы.</p>`;
-    t.appendChild(f); const inp=f.querySelector('#pname'), go=f.querySelector('#pgo'); inp.value=AUTH?AUTH.login:(S.player||''); if(AUTH){ inp.readOnly=true; f.querySelector('label').textContent='Играет'; }
+    t.appendChild(f); const inp=f.querySelector('#pname'), go=f.querySelector('#pgo'); inp.value=S.player||'';
     const upd=()=>{ go.disabled=!inp.value.trim(); }; upd(); inp.oninput=upd;
     f.onsubmit=e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v) return; startRun(v); next(); };
     $('#log').innerHTML='&nbsp;'; idlePanel(); updScore(); if(!S.player) inp.focus({preventScroll:true}); return; }
@@ -1631,10 +1636,11 @@ $('#players').value=String(N);
 $('#players').onchange=e=>{ N=+e.target.value; save(); idle(); };
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if(document.getElementById('app').hidden) return;
   const k=e.key.toLowerCase();
   const sh=document.getElementById('sheet'); if(sh){ if(k==='escape'||k==='enter'){ e.preventDefault(); sh.remove(); } return; }
   if(ANIM||BACK) return;
-  if(IDLE){ if(k==='enter'||k===' '){ e.preventDefault(); next(); } return; }
+  if(IDLE){ if(k==='enter'||k===' '){ e.preventDefault(); const sb=document.getElementById('start'); if(sb) sb.click(); else next(); } return; }
   if(H.over){ if(k==='enter'||k===' '){ e.preventDefault(); next(); } return; }
   if(k==='f'||k==='а') heroAct('F');
   else if(k==='x'||k==='ч') heroAct('X');
