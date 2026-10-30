@@ -1420,7 +1420,7 @@ function recDecision(h,d,a,amt){
   RS.dec.push({t:Date.now(),m:REC?'rec':MODE,g:GAME,N,pos:lab(h.hero),d:isSB(h.hero)?-1:isBB(h.hero)?-2:dist(h.hero),
     h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,lim:d.level===0?h.callers:null,
     open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,callers:d.level>=1?h.callers:null,
-    cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
+    cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,ok:h.decisions[h.decisions.length-1].al,n:RUN.hands.length+1,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
   RS.updated=Date.now(); }
 // личный журнал «Префлопа»: пишется в отдельный лист базы, в статистику аккаунта не попадает
 let PS=null; const PS_MAX=200, PS_GAP=30*60*1000;

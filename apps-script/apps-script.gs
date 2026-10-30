@@ -1,5 +1,5 @@
 // Бэкенд тренажёра Melnik Poker на Google Таблице.
-// Листы создаются сами: «Сессии» (результаты), «Аккаунты» (логин, соль, хеш пароля), «Входы» (ключи входа).
+// Листы создаются сами: «Сессии» (результаты), «Раздачи профиля» (каждое решение тестов отдельной строкой, по времени), «Аккаунты» (логин, соль, хеш пароля), «Входы» (ключи входа).
 // Все запросы — POST с JSON в теле (Content-Type: text/plain). Поле action выбирает действие:
 //   register {login, password}       → {ok, token, login}
 //   login    {login, password}       → {ok, token, login}
@@ -11,10 +11,11 @@
 //   без action — результат сессии {id, name, started, updated, summary, dec, token?};
 //   повторная отправка той же сессии (тот же id) обновляет её строку.
 
-const SHEET = 'Сессии', ACC = 'Аккаунты', TOK = 'Входы', PF = 'Префлоп';
+const SHEET = 'Сессии', ACC = 'Аккаунты', TOK = 'Входы', PF = 'Префлоп', HANDS = 'Раздачи профиля';
 const HEAD = ['Получено', 'ID', 'Имя', 'Начало', 'Раздач', 'Тип', 'VPIP', 'PFR', 'Лимпы', 'Точность', 'Итог (JSON)', 'Решения (JSON)', 'Аккаунт'];
 const ACC_HEAD = ['Логин', 'Ключ', 'Соль', 'Хеш', 'Создан', 'Последний вход'];
 const PF_HEAD = ['Получено', 'ID', 'Аккаунт', 'Начало', 'Решений', 'Верно %', 'Неверных', 'Решения (JSON)'];
+const HANDS_HEAD = ['Время', 'Аккаунт', 'Тест (ID)', 'Раздача №', 'Позиция', 'Рука', 'Карты', 'Ситуация', 'К коллу', 'Действие', 'Сумма', 'Правильно', 'Оценка', 'Что было до тебя'];
 const TOK_HEAD = ['Ключ входа', 'Аккаунт', 'Создан', 'Действует до'];
 const TOKEN_DAYS = 90, HASH_ROUNDS = 2000, PROF_N = 50;
 
@@ -48,7 +49,7 @@ function doPost(e) {
   }
 }
 
-function doGet() { sh_(SHEET, HEAD); sh_(PF, PF_HEAD); sh_(ACC, ACC_HEAD); sh_(TOK, TOK_HEAD); return out_({ ok: true, sheet: SHEET }); }
+function doGet() { sh_(SHEET, HEAD); sh_(HANDS, HANDS_HEAD); sh_(PF, PF_HEAD); sh_(ACC, ACC_HEAD); sh_(TOK, TOK_HEAD); return out_({ ok: true, sheet: SHEET }); }
 
 function out_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
@@ -139,8 +140,52 @@ function saveSession_(x) {
   const ids = sh.getRange(1, 2, sh.getLastRow(), 1).getValues().map(r => String(r[0]));
   const at = ids.indexOf(String(x.id));
   if (at > 0) sh.getRange(at + 1, 1, 1, row.length).setValues([row]);
-  else sh.appendRow(row);
+  else { sh.appendRow(row); addHands_(String(x.id), a ? a.login : String(x.name || ''), dec); }
   return { ok: true };
+}
+
+// ---------- раздачи профиля: одна строка на решение, в порядке времени ----------
+const SIT_ = { open: 'Первым в банк', iso: 'Против лимпа', bbiso: 'ББ против лимпа', vsopen: 'Против рейза', vs3b: 'Против 3-бета',
+  cold3b: 'Против рейза и 3-бета', vs4b: 'Против 4-бета', cold4b: 'Против 4-бета, холодно', vsjam: 'Против олл-ина' };
+const RNAME_ = { iso: 'Рейз', open: 'Рейз', bbiso: 'Рейз', vsopen: '3-бет', vs3b: '4-бет', cold3b: '4-бет', vs4b: '5-бет', cold4b: '5-бет', vsjam: 'Олл-ин' };
+function actName_(a, d) {
+  if (a === 'F') return 'Фолд'; if (a === 'X') return 'Чек';
+  if (a === 'C') return d.k === 'open' ? 'Лимп' : 'Колл';
+  return RNAME_[d.k] || 'Рейз';
+}
+function handRows_(id, login, dec) {
+  let n = 0, prev = null;
+  return dec.map(d => {
+    // номер раздачи: из клиента, а для старых тестов — по смене карт или позиции
+    const key = (d.c || d.h) + '|' + d.pos;
+    if (d.n) n = d.n; else if (key !== prev) n++;
+    prev = key;
+    return [d.t ? new Date(d.t) : '', login, id, n, d.pos || '', d.h || '', d.c || '', SIT_[d.k] || d.k || '',
+      d.toCall || 0, actName_(d.a, d), d.a === 'R' ? d.amt || '' : '',
+      Array.isArray(d.ok) ? d.ok.map(a => actName_(a, d)).join(' / ') : '',
+      d.gr === 2 ? 'верно' : d.gr === 1 ? 'неточный размер' : d.gr === 0 ? 'ошибка' : '', String(d.ctx || '').slice(0, 300)];
+  });
+}
+function addHands_(id, login, dec) {
+  const rows = handRows_(id, login, dec || []);
+  if (!rows.length) return;
+  const sh = sh_(HANDS, HANDS_HEAD);
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, HANDS_HEAD.length).setValues(rows);
+}
+// Запусти один раз вручную в редакторе (выбрать rebuildHands → Выполнить): пересобирает «Раздачи профиля»
+// из всех тестов в «Сессиях», включая сохранённые до появления этого листа. Повторный запуск безопасен.
+function rebuildHands() {
+  const all = [];
+  rows_(sh_(SHEET, HEAD)).forEach(r => {
+    if (/^pf/.test(String(r[1]))) return;
+    let dec = []; try { dec = JSON.parse(r[11] || '[]'); } catch (e) { return; }
+    handRows_(String(r[1]), String(r[2]), dec).forEach(x => all.push(x));
+  });
+  all.sort((p, q) => (p[0] ? +p[0] : 0) - (q[0] ? +q[0] : 0));
+  const sh = sh_(HANDS, HANDS_HEAD);
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+  if (all.length) sh.getRange(2, 1, all.length, HANDS_HEAD.length).setValues(all);
+  return all.length;
 }
 
 // журнал «Префлопа»: одна строка на серию раздач, повторная отправка того же id обновляет строку
