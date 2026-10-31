@@ -169,9 +169,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .hand,.seat .mini{position:relative}
 .hand .plus,.seat .mini .plus{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);margin:0;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 .seat .mini .plus{width:18px;height:18px;font-size:13px;bottom:-5px}
-.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20;padding-left:max(0px, env(safe-area-inset-left, 0px));padding-right:max(0px, env(safe-area-inset-right, 0px))}
-.sheetcard{background:var(--surface);color:var(--ink);width:100%;max-width:520px;max-height:88vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px max(16px, env(safe-area-inset-left, 0px)) calc(16px + env(safe-area-inset-bottom, 0px));display:grid;gap:10px}
-.sheethead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+html:has(.sheet),html:has(.sheet) body{overflow:hidden}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20;overscroll-behavior:contain;touch-action:none;padding-left:max(0px, env(safe-area-inset-left, 0px));padding-right:max(0px, env(safe-area-inset-right, 0px))}
+.sheetcard{background:var(--surface);color:var(--ink);width:100%;max-width:520px;max-height:88vh;max-height:88dvh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;border-radius:16px 16px 0 0;padding:16px max(16px, env(safe-area-inset-left, 0px)) calc(16px + env(safe-area-inset-bottom, 0px));display:grid;gap:10px}
+.sheethead{position:sticky;top:-16px;z-index:2;background:var(--surface);margin:-16px -16px 0;padding:16px 16px 6px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .sheetcard p{margin:0}
 .xbtn{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--sunk);color:var(--ink);font:600 15px var(--f-body);cursor:pointer;flex:none}
 .grid .W1{background:var(--raise);color:#fff}
@@ -345,7 +346,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .xyplot .axis{stroke:var(--muted);stroke-opacity:.45}
 .xyplot .zt text{font:500 9.5px var(--f-body);fill:var(--muted);fill-opacity:.75;text-anchor:middle;dominant-baseline:middle}
 .xyplot .gto circle{fill:var(--good)}.xyplot .gto text{font:700 11px var(--f-mono);fill:var(--good)}
-.xyplot .pt{fill:var(--raise);stroke:var(--surface);stroke-width:3}
+.xyplot .pt{fill:var(--raise);stroke:var(--surface);stroke-width:3.5;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}.xyplot .pthalo{fill:var(--raise);fill-opacity:.18}
 .xyplot .area{fill:var(--raise);fill-opacity:.2;stroke:var(--raise);stroke-width:2;stroke-dasharray:5 4}
 .xyplot .ctr{fill:var(--raise)}
 .xycap{margin:2px 0 0;font-size:13px;color:var(--muted);text-align:center}
@@ -1832,7 +1833,9 @@ function xyPlot(xy,locked,n,sz,loading){ const S=300, m=S/2, k=(S/2-18), X=v=>m+
   let mark='';
   if(xy&&!locked){ const rx=Math.max(.05,xy.hx), ry=Math.max(.05,xy.hy), pt=xy.hx<=.1&&xy.hy<=.1;
     const cloud=!pt&&xy.blobs&&xy.blobs.length>=2&&xy.spread>.1;
-    mark=pt?`<circle class="pt" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="9"/>`:cloud?`<image href="${cloudURL(xy.blobs,getComputedStyle(document.documentElement).getPropertyValue('--raise').trim())}" x="${X(-1)}" y="${Y(1)}" width="${2*k}" height="${2*k}" preserveAspectRatio="none" style="image-rendering:auto"/>`:`<ellipse class="area" cx="${X(xy.x)}" cy="${Y(xy.y)}" rx="${Math.min(1.2,rx)*k}" ry="${Math.min(1.2,ry)*k}"/><circle class="ctr" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="3.5"/>`;
+    // без эллипсов: при малом разбросе — одно облако вокруг центра (граница ≈ полуоси области), чуть «живое» за счёт ситуаций рядом
+    const CB=pt?null:cloud?xy.blobs:[{x:xy.x,y:xy.y,sx:Math.min(1.2,rx)/1.79,sy:Math.min(1.2,ry)/1.79,w:1}].concat((xy.blobs||[]).map(b=>({x:xy.x+.5*(b.x-xy.x),y:xy.y+.5*(b.y-xy.y),sx:Math.min(1.2,rx)/2.4,sy:Math.min(1.2,ry)/2.4,w:.35*b.w/Math.max(1,(xy.blobs||[]).reduce((a,c)=>a+c.w,0))})));
+    mark=pt?`<circle class="pthalo" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="17"/><circle class="pt" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="11"/>`:`<image href="${cloudURL(CB,getComputedStyle(document.documentElement).getPropertyValue('--raise').trim())}" x="${X(-1)}" y="${Y(1)}" width="${2*k}" height="${2*k}" preserveAspectRatio="none" style="image-rendering:auto"/>`;
     w.dataset.mode=pt?'point':'area'; }
   w.innerHTML=`<div class="xytag">Префлоп профиль</div><div class="xyax xt">Агрессивный</div><div class="xyrow"><div class="xyax xl">Тайтовый</div>
     <svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Координаты стиля игры"><rect class="bg" x="${X(-1)}" y="${Y(1)}" width="${2*k}" height="${2*k}" rx="10"/>
@@ -1844,7 +1847,7 @@ function xyPlot(xy,locked,n,sz,loading){ const S=300, m=S/2, k=(S/2-18), X=v=>m+
     o.lastChild.textContent=`Сыграй 50+ раздач в режимах «GTO тест» или «Префлоп». Сейчас: ${n||0} из ${XY_MIN}.`; w.appendChild(o); }
   else if(xy){ const c=document.createElement('p'); c.className='xycap';
     const sg=v=>(v>0?'+':v<0?'−':'')+Math.abs(v);
-    c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям.':(w.dataset.mode==='area'&&xy.blobs&&xy.spread>.1&&xy.blobs.length>=2?'Облако — твоя игра в разных ситуациях. Если оно распалось на части, в разных спотах ты играешь по-разному. ':'')+(xy.incons?'Ошибки в разные стороны гасят друг друга в среднем, поэтому игра нестабильная, даже если рядом с GTO.':'Область — где вероятнее всего твой стиль; с каждой игрой она уточняется и может смещаться.'));
+    c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям, уверенность высокая.':(xy.blobs&&xy.spread>.1&&xy.blobs.length>=2?'Облако — твоя игра в разных ситуациях. Если оно распалось на части, в разных спотах ты играешь по-разному. ':'Облако — где вероятнее всего твой стиль: чем оно меньше, тем увереннее оценка. С каждой игрой оно уточняется и может смещаться. ')+(xy.incons?'Ошибки в разные стороны гасят друг друга в среднем, поэтому игра нестабильная, даже если рядом с GTO.':''));
     w.appendChild(c);
     if(sz){ const c2=document.createElement('p'); c2.className='xycap'; c2.textContent=`Сайзинг: ${sz.pct}% рейзов нужного размера (из ${sz.n}).`; w.appendChild(c2); } }
   return w; }
