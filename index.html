@@ -1492,6 +1492,9 @@ function gradePost(h,hs,a,amt){
     else if(m==='F'&&a==='C') g= e>=c.callT-T?2:0;
     else g=0;
   }
+  // пограничное решение: эквити в пределах ~3 п.п. от порога — засчитываем оба действия и прямо говорим об этом в пояснении
+  if(g===2&&a!==m&&!(m==='R'&&hs.bl)){ const W={F:'фолд',C:'колл',X:'чек',R:a==='R'&&c.facing?'рейз':'ставка'};
+    text+=` Это граница: эквити отличается от порога меньше чем на 3 п.п., разница в EV почти нулевая, поэтому ${W[a]} тоже верно.`; }
   if(c.vsStation&&!c.facing) text+=` В банке станции (${c.names}): они не сбрасывают, поэтому без блефов, а добор тоньше и крупнее (≈ 3/4 банка).`;
   else if(c.vsNit&&!c.facing) text+=` В банке тайтовые (${c.names}): слабым они не заплатят, добираем только сильными руками.`;
   if(c.facing&&NAMES()) text+=` ${prof(h,h.aggrNow??c.opps[0]).note} Диапазон ставки сужен с учётом профиля.`;
@@ -1499,7 +1502,8 @@ function gradePost(h,hs,a,amt){
     if(!allin&&!inb(amt,b.ok)){ g=1; note=`Размер ${amt} ${amt>b.ok[1]?'слишком крупный':'слишком мелкий'}. База — ${b.txt}.`; }
     else if(!allin&&!inb(amt,b.best)) note=`Размер ${amt} допустим, база — ${b.txt}.`; }
   if(g===1&&!note) note= a==='R'&&!c.facing?'Ставка без вэлью: допустимо как блеф, но не лучший выбор.':'Не ошибка, но модель играет иначе.';
-  return {g,note,text,mtext:modelText(hs)};
+  const edge=g===2&&a!==m&&!(m==='R'&&hs.bl), AW={F:'фолд',C:'колл',X:'чек',R:c.facing?'рейз':'ставка'};
+  return {g,note,text,mtext:modelText(hs)+(edge?` · ${AW[a]} тоже верно`:'')};
 }
 function postCtx(h){
   const acts=h.log.filter(e=>e.st===h.street).map(e=>`${nmOf(h,e.p)} ${e.t}`);
