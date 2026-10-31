@@ -2055,6 +2055,31 @@ function gtoSizing(run){ const G={open:[],vsopen:[],vs3b:[]}, out=[];
   if(!G.vs3b.length&&G.vsopen.length) out.push('4-бетов в тесте не было, поэтому их размер не оценён.');
   return out; }
 // уровень игрока задаёт тон: хорошему — мелкая настройка, слабому — больше базовых правил
+const plw=(n,a,b,c)=>{ const m=n%10, h=n%100; return m===1&&h!==11?a:m>=2&&m<=4&&(h<10||h>=20)?b:c; };
+// короткий итог теста в сравнении с GTO: 3–5 фраз с цифрами
+function resSummary(A,run){ const F=A.F, TP=profTips(A,run), out=[], r=x=>Math.round(x), nh=run.hands.length;
+  const sc=A.irt?r(A.irt.score):null;
+  if(A.nDec){ const lv=sc==null?'':sc>=90?' Это очень близко к оптимальной стратегии.':sc>=75?' Крепкая база, но есть заметные утечки.':sc>=60?' Игра заметно отличается от оптимальной.':' Пока далеко от оптимальной стратегии.';
+    out.push(`За ${nh} ${plw(nh,'раздачу','раздачи','раздач')} ${A.good} из ${A.nDec} решений совпали с GTO${sc!=null?`, с учётом сложности решений — ${sc}%`:''}.${lv}`); }
+  const fl=F.fo?F.fp.length/F.fo:0, ft=F.po?F.pf.length/F.po:0, fa=F.ar.length;
+  const sty=[]; if(F.fo>=5&&fl>=.2) sty.push(`из ${F.fo} ${plw(F.fo,'руки','рук','рук')}, которые GTO сбрасывает, ты сыграл ${F.fp.length}`);
+  if(F.po>=5&&ft>=.2) sty.push(`из ${F.po} ${plw(F.po,'руки','рук','рук')}, которые GTO играет, сбросил ${F.pf.length}`);
+  if(F.ro>=5&&F.rc.length/F.ro>=.2) sty.push(`там, где GTO рейзит, ${F.rc.length} из ${F.ro} раз сыграл коллом`);
+  if(F.lo>=5&&F.lim/F.lo>=.15) sty.push(`первым в банк лимпил ${F.lim} из ${F.lo} раз`);
+  if(fa>=3&&fl<.2) sty.push(`${fa} ${plw(fa,'раз','раза','раз')} рейзил там, где GTO коллирует или сбрасывает`);
+  const kind=fl>=.2&&ft<.2?'Главный перекос — лишние руки':ft>=.2&&fl<.2?'Главный перекос — слишком тайтово':fl>=.2?'Главный перекос — неточные границы диапазонов':'Главный перекос — лишняя агрессия';
+  out.push(sty.length?`${kind}: ${sty.join('; ')}. В целом в банк входишь в ${r(A.V)}% рук (GTO ${r(A.Vc)}%), рейзишь в ${r(A.P)}% (GTO ${r(A.Pc)}%).`
+    :`Границы диапазонов близки к GTO: в банк входишь в ${r(A.V)}% рук (GTO ${r(A.Vc)}%), рейзишь в ${r(A.P)}% (GTO ${r(A.Pc)}%).`);
+  const lk=TP.tips.filter(t=>t[2]&&t[2].length).concat(TP.tips.filter(t=>!(t[2]&&t[2].length)&&!/^База/.test(t[0]))).slice(0,2).map(t=>lc1(t[0]).replace(/: /,' — '));
+  if(lk.length) out.push(`Больше всего теряешь здесь: ${lk.join('; ')}.`);
+  const good=[]; if(F.po>=5&&F.pf.length<=F.po*.1) good.push(`${F.pf.length?'почти ':''}не сбрасываешь руки, которые надо играть (${F.pf.length} из ${F.po})`);
+  if(F.ro>=5&&F.rc.length<=F.ro*.1) good.push('не коллируешь там, где нужен рейз'); if(F.lo>=5&&!F.lim) good.push('не лимпишь');
+  if(F.fo>=5&&F.fp.length<=F.fo*.1) good.push(`${F.fp.length?'почти ':''}не играешь лишних рук (${F.fp.length} из ${F.fo})`);
+  if(good.length) out.push(`Сильная сторона: ${good.slice(0,2).join(' и ')}.`);
+  const szl=gtoSizing(run).filter(t=>/(Крупнее|Мельче) GTO в \d+ из \d+/.test(t)).map(t=>{ const m=t.match(/^([^:]+): обычно ([^(]+?)\s*(?:\([^)]*\))?, в GTO ([^(.:]+?)\s*(?:\(|\.|:)/), c=t.match(/(Крупнее|Мельче) GTO в (\d+) из (\d+)/);
+    return m?`${lc1(m[1])} обычно ${m[2]} вместо ${m[3].replace(/^около /,'')} (${c[2]} из ${c[3]})`:null; }).filter(Boolean);
+  if(szl.length) out.push(`По сайзингу: ${szl.join('; ')}.`);
+  return out.join(' '); }
 // короткий вывод по сайзингу для итога
 function TPS(run){ const l=gtoSizing(run).filter(t=>/Крупнее GTO|Мельче GTO|олл-ин:/.test(t)); return l.length?'Сайзинг: '+l.map(t=>t.split('.')[0].replace(/: обычно.*$/,'')).map(lc1).join(', ')+' — размер не по GTO, подробности в разделе сайзинга.':''; }
 function tipLevel(A){ const z=A.xy?zoneOf(A.xy):['ok','bal'], acc=A.nDec?A.goodA/A.nDec*100:A.acc; if(acc>=82&&z[0]==='ok'&&!(A.xy&&A.xy.incons)) return 'good'; if(acc>=68&&z[0]!=='wild') return 'mid'; return 'weak'; }
@@ -2120,7 +2145,7 @@ function renderResults(){ syncRun();
     sizing:A.tells.map(t=>t.txt),reps:A.reps.map(r=>({h:r.h,pos:r.pos,same:r.same,a1:r.a1,a2:r.a2})),outs:A.outs}; RS.updated=Date.now(); save(); persist(RS); }
   const v=document.createElement('section'); v.className='verdict res'; v.id='results';
   const hd=document.createElement('div'); hd.innerHTML='<p class="psub"></p><h2 class="ptype"></h2><p class="psub"></p>';
-  hd.children[0].textContent=`Префлоп профиль игрока «${run.name}»`; hd.children[1].textContent=A.type; hd.children[2].textContent=`VPIP ${pc(A.V)} (по GTO ${pc(A.Vc)}), PFR ${pc(A.P)} (по GTO ${pc(A.Pc)}). Уверенность оценки: ${A.conf}.`;
+  hd.children[0].textContent=`Префлоп профиль игрока «${run.name}»`; hd.children[1].textContent=A.type; hd.children[2].textContent=resSummary(A,run); hd.children[2].classList.add('rsum');
   v.appendChild(hd);
   { const cur=[]; for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue; cur.push({pos:x.pos,h:x.h,k:x.d.kind,a:x.a,amt:x.amt||0,ok:x.al,toCall:x.d.toCall,N,g:x.g}); }
     const rows=(HIST.rows||[]).concat(cur).slice(-300), HT=histType(rows);
