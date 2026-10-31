@@ -1836,7 +1836,7 @@ function xyPlot(xy,locked,n,sz,loading){ const S=300, m=S/2, k=(S/2-18), X=v=>m+
   if(xy&&!locked){ const rx=Math.max(.05,xy.hx), ry=Math.max(.05,xy.hy), pt=xy.hx<=.1&&xy.hy<=.1;
     const cloud=!pt&&xy.blobs&&xy.blobs.length>=2&&xy.spread>.1;
     // без эллипсов: при малом разбросе — одно облако вокруг центра (граница ≈ полуоси области), чуть «живое» за счёт ситуаций рядом
-    const CB=pt?null:cloud?xy.blobs:[{x:xy.x,y:xy.y,sx:Math.min(1.2,rx)/1.79,sy:Math.min(1.2,ry)/1.79,w:1}].concat((xy.blobs||[]).map(b=>({x:xy.x+.5*(b.x-xy.x),y:xy.y+.5*(b.y-xy.y),sx:Math.min(1.2,rx)/2.4,sy:Math.min(1.2,ry)/2.4,w:.35*b.w/Math.max(1,(xy.blobs||[]).reduce((a,c)=>a+c.w,0))})));
+    const CB=pt?null:xy.blobs&&xy.blobs.length?xy.blobs:[{x:xy.x,y:xy.y,sx:Math.min(1.2,rx)/1.79,sy:Math.min(1.2,ry)/1.79,w:1}];
     mark=pt?`<circle class="pthalo" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="17"/><circle class="pt" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="11"/>`:`<image href="${cloudURL(CB,getComputedStyle(document.documentElement).getPropertyValue('--raise').trim())}" x="${X(-1)}" y="${Y(1)}" width="${2*k}" height="${2*k}" preserveAspectRatio="none" style="image-rendering:auto"/>`;
     w.dataset.mode=pt?'point':'area'; }
   w.innerHTML=`<div class="xytag">Префлоп профиль</div><div class="xyax xt">Агрессивный</div><div class="xyrow"><div class="xyax xl">Тайтовый</div>
@@ -1849,7 +1849,7 @@ function xyPlot(xy,locked,n,sz,loading){ const S=300, m=S/2, k=(S/2-18), X=v=>m+
     o.lastChild.textContent=`Сыграй 50+ раздач в режимах «GTO тест» или «Префлоп». Сейчас: ${n||0} из ${XY_MIN}.`; w.appendChild(o); }
   else if(xy){ const c=document.createElement('p'); c.className='xycap';
     const sg=v=>(v>0?'+':v<0?'−':'')+Math.abs(v);
-    c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям, уверенность высокая.':(xy.drift>=.3?'Облако растянуто: за последние сотни раздач твой стиль заметно сместился, свежие раздачи весят больше. ':'')+(xy.blobs&&xy.spread>.1&&xy.blobs.length>=2?'Облако — твоя игра в разных ситуациях. Если оно распалось на части, в разных спотах ты играешь по-разному. ':'Облако — где вероятнее всего твой стиль: чем оно меньше, тем увереннее оценка. С каждой игрой оно уточняется и может смещаться. ')+(xy.incons?'Ошибки в разные стороны гасят друг друга в среднем, поэтому игра нестабильная, даже если рядом с GTO.':''));
+    c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям, уверенность высокая.':(xy.drift>=.3?'Облако растянуто: за последние сотни раздач твой стиль заметно сместился, свежие раздачи весят больше. ':'')+(xy.sspread>.1?'Облако — твоя игра в разных ситуациях. Если оно распалось на части, в разных спотах ты играешь по-разному. ':'Облако — где вероятнее всего твой стиль: чем оно меньше, тем увереннее оценка. С каждой игрой оно уточняется и может смещаться. ')+(xy.incons?'Ошибки в разные стороны гасят друг друга в среднем, поэтому игра нестабильная, даже если рядом с GTO.':''));
     w.appendChild(c);
     if(sz){ const c2=document.createElement('p'); c2.className='xycap'; c2.textContent=`Сайзинг: ${sz.pct}% рейзов нужного размера (из ${sz.n}).`; w.appendChild(c2); } }
   return w; }
@@ -1869,7 +1869,7 @@ function classifyType(D,V,Vg,P,Pg,acc){
   return {lo,ti,pa,ag,width,style,name:NM[width][style]}; }
 // тип по последним ≤300 решениям из истории (тесты «Профиля» и «Префлоп»), свежие весят больше: вес e^(−давность/150)
 function histType(rows){ rows=(rows||[]).filter(r=>r&&HPOS[r.h]!=null&&Array.isArray(r.ok)&&r.ok.length); const n=rows.length; if(n<20) return null;
-  const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0}, SG={}, DS={}, DC=[]; let good=0,tw=0,szOk=0,szN=0;
+  const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0}, SG={}, DS={}, DC=[], RC=[]; let good=0,tw=0,szOk=0,szN=0;
   rows.forEach((r,i)=>{ const w=Math.exp(-(n-1-i)/150), al=r.ok; tw+=w; if(al.includes(r.a)) good+=w;
     if(isOutlier(r.h,r.a,r.amt,al)) return; // грубый промах (сброс AA, пуш мусором) — случайность, в оценку не идёт
     if(r.a==='R'&&al.includes('R')&&r.g!=null){ szN+=w; if(r.g===2) szOk+=w; } // сайзинг: рейз был верным решением, оцениваем размер
@@ -1880,6 +1880,9 @@ function histType(rows){ rows=(rows||[]).filter(r=>r&&HPOS[r.h]!=null&&Array.isA
     if(gPlay&&!gFold){ D.to+=w*sev; if(!pPlay) D.t+=w*sev; }
     if(pPlay&&gPlay&&gRaise&&!gNoRaise){ D.po+=w; if(r.a==='C') D.p+=w; }
     if(pPlay&&gNoRaise&&!gRaise){ D.ao+=w; if(r.a==='R') D.a+=w; }
+    { const c={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0}; // вклад решения — для бутстрапа формы облака
+      if(gFold&&!gPlay){ c.lo=w*sev; if(pPlay) c.l=w*sev; } if(gPlay&&!gFold){ c.to=w*sev; if(!pPlay) c.t=w*sev; }
+      if(pPlay&&gPlay&&gRaise&&!gNoRaise){ c.po=w; if(r.a==='C') c.p=w; } if(pPlay&&gNoRaise&&!gRaise){ c.ao=w; if(r.a==='R') c.a=w; } RC.push(c); }
     { const c=DC[Math.floor((n-1-i)/100)]=DC[Math.floor((n-1-i)/100)]||{a:0,ao:0,p:0,po:0,l:0,lo:0,t:0,to:0,n:0}; c.n++; // та же статистика по сотням раздач: 0 — последние 100
       if(gFold&&!gPlay){ c.lo+=sev; if(pPlay) c.l+=sev; } if(gPlay&&!gFold){ c.to+=sev; if(!pPlay) c.t+=sev; }
       if(pPlay&&gPlay&&gRaise&&!gNoRaise){ c.po++; if(r.a==='C') c.p++; } if(pPlay&&gNoRaise&&!gRaise){ c.ao++; if(r.a==='R') c.a++; } }
@@ -1893,7 +1896,7 @@ function histType(rows){ rows=(rows||[]).filter(r=>r&&HPOS[r.h]!=null&&Array.isA
     V+=fw*f.t; Vg+=fw*SITQ[sg].q; P+=fw*Math.min(f.t,fr.t); Pg+=fw*SITQ[sg].qr; FW+=fw; }
   if(FW){ V/=FW; Vg/=FW; P/=FW; Pg/=FW; }
   const acc=tw?good/tw*100:0, C0=classifyType(D,V,Vg,P,Pg,acc), xy=styleXY(fits,D,acc);
-  if(xy) addBlobs(xy,fits,DS,D,DC);
+  if(xy) addBlobs(xy,fits,DS,D,DC,RC);
   return {type:xy?xyType(xy,C0.width==='mixed',acc).name:C0.name,n,xy,sz:szN>=4?{pct:Math.round(szOk/szN*100),n:Math.round(szN)}:null}; }
 // облако: каждая ситуация с данными — своя точка (ширина в ней и агрессия в ней) с погрешностью. Если игрок в одних ситуациях
 // шире GTO, а в других уже, облако распадается на части (бублик, дуга), и пустой центр не выдаётся за «идеальную» игру.
@@ -1901,20 +1904,27 @@ function histType(rows){ rows=(rows||[]).filter(r=>r&&HPOS[r.h]!=null&&Array.isA
 // на треть своего отклонения, с 60 — почти полностью; одна-две ошибки в маленьком споте облако не раздувают.
 // Плюс точки по сотням раздач (последние 100, предыдущие 100…): если стиль со временем сменился, облако тянется между ними.
 const XY_SHK=20;
-function addBlobs(xy,fits,DS,D,DC){ const B=[], rt=(u,v)=>(u+.05)/(v+1);
+function addBlobs(xy,fits,DS,D,DC,RC){ const B=[], rt=(u,v)=>(u+.05)/(v+1);
   const pos=d=>{ const ag=rt(d.a,d.ao), pa=rt(d.p,d.po), lo=rt(d.l,d.lo), ti=rt(d.t,d.to), dx=lo-ti;
     return {x:dx>0?1.1*dx:2*dx,y:ag-pa,nx:d.lo+d.to,ny:d.ao+d.po,sx:Math.sqrt(lo*(1-lo)/(d.lo+1)+4*ti*(1-ti)/(d.to+1)),sy:Math.sqrt(ag*(1-ag)/(d.ao+1)+pa*(1-pa)/(d.po+1))}; };
   const g=pos(D), put=(p,w,kind)=>{ const fx=p.nx/(p.nx+XY_SHK), fy=p.ny/(p.ny+XY_SHK);
-    B.push({x:clamp1(xy.x+(p.x-g.x)*fx),y:clamp1(xy.y+(p.y-g.y)*fy),sx:Math.max(.08,Math.min(.25,fx*p.sx)),sy:Math.max(.08,Math.min(.25,fy*p.sy)),w,kind}); };
+    B.push({x:clamp1(xy.x+(p.x-g.x)*fx),y:clamp1(xy.y+(p.y-g.y)*fy),sx:Math.max(.07,Math.min(.25,fx*p.sx)),sy:Math.max(.07,Math.min(.25,fy*p.sy)),w,kind}); };
   for(const f of fits){ const d=DS[f.sg]; if(!d||f.n<3) continue; put(pos(d),d.n,'sit'); }
   const T=(DC||[]).filter(c=>c&&c.n>=40);
   if(T.length>=2){ const sw=B.reduce((a,b)=>a+b.w,0)||1; const tw=[1,.6,.4]; const tws=T.reduce((a,c,i)=>a+(tw[i]||.3),0); T.forEach((c,i)=>put(pos(c),sw*(tw[i]||.3)/tws,'time'));
     const t0=B.find(b=>b.kind==='time'), tl=B.filter(b=>b.kind==='time').pop(); xy.drift=Math.hypot(t0.x-tl.x,t0.y-tl.y); }
+  // бутстрап: 160 раз пересобираем выборку из тех же решений (с повторами) и ставим точку стиля для каждой. Облако этих точек —
+  // реальная форма неопределённости: неровная, вытянутая туда, куда тянут конкретные ошибки, а не эллипс по формуле.
+  if(RC&&RC.length>=20){ const N=160, m=RC.length, sw0=B.filter(b=>b.kind==='sit').reduce((a,b)=>a+b.w,0)||m;
+    let sd=(m*7919+Math.round((D.l+2*D.t+3*D.p+5*D.a)*1000))>>>0; const rnd=()=>{ sd=(sd+0x6D2B79F5)>>>0; let t=sd; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; };
+    for(let k=0;k<N;k++){ const S={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0};
+      for(let j=0;j<m;j++){ const c=RC[Math.floor(rnd()*m)]; for(const q in S) S[q]+=c[q]; }
+      const p=pos(S); B.push({x:clamp1(xy.x+(p.x-g.x)),y:clamp1(xy.y+(p.y-g.y)),sx:.045,sy:.045,w:sw0/N,kind:'boot'}); } }
   const W=B.reduce((a,b)=>a+b.w,0); if(!W) return;
   const mx=B.reduce((a,b)=>a+b.w*b.x,0)/W, my=B.reduce((a,b)=>a+b.w*b.y,0)/W, spr=Math.sqrt(B.reduce((a,b)=>a+b.w*((b.x-mx)**2+(b.y-my)**2),0)/W);
   const S=B.filter(b=>b.kind==='sit'), SW=S.reduce((a,b)=>a+b.w,0)||1, smx=S.reduce((a,b)=>a+b.w*b.x,0)/SW, smy=S.reduce((a,b)=>a+b.w*b.y,0)/SW,
     sspr=Math.sqrt(S.reduce((a,b)=>a+b.w*((b.x-smx)**2+(b.y-smy)**2),0)/SW);
-  xy.blobs=B; xy.spread=spr; if(sspr>=.35) xy.incons=true; if(spr>.1){ xy.hx=Math.max(xy.hx,.11); xy.hy=Math.max(xy.hy,.11); } }
+  xy.blobs=B; xy.spread=spr; xy.sspread=sspr; if(sspr>=.35) xy.incons=true; if(spr>.1){ xy.hx=Math.max(xy.hx,.11); xy.hy=Math.max(xy.hy,.11); } }
 // рисует облако плотностью на канвасе: заливка там, где плотность ≥ 22% от максимума, край чуть темнее
 function cloudURL(B,col){ const G=200, cv=document.createElement('canvas'); cv.width=cv.height=G; const c=cv.getContext('2d'), im=c.createImageData(G,G), D=new Float32Array(G*G); let mx=0;
   for(let j=0;j<G;j++) for(let i=0;i<G;i++){ const u=-1+2*(i+.5)/G, v=1-2*(j+.5)/G; let d=0;
