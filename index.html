@@ -1402,8 +1402,12 @@ function sctx(h,p){
   } else {
     c.facing=true; c.po=toCall/(pot+toCall);
     const noFuture= toCall>=left(pl) || opps.every(q=>h.players[q].allin||h.players[q].bet>=h.curBet&&left(h.players[q])<=0) || s===3;
-    c.adj= noFuture?0:(s===1?.05:.03);
-    c.callT=Math.max(0,c.po-c.adj);
+    // без позиции против ставившего эквити реализуется хуже: по решениям солвера (TexasSolver, 8 флопов + тёрн)
+    // BB коллирует примерно с шансами банка + 13 п.п.; в позиции и на ривере хватает самих шансов банка
+    const bettor=h.aggrNow??c.opps[0];
+    c.oop= bettor!=null&&posOrder(p)<posOrder(bettor);
+    c.adj= noFuture||!c.oop?0:.13;
+    c.callT=Math.min(.95,c.po+c.adj);
     c.Rt=Math.pow(h.slevel>=2?.88:(s===1?.78:s===2?.8:.85),n);
     c.raiseTo= h.slevel>=2?maxTo:ev(h.curBet*(s===3?2.8:3)); if(c.raiseTo>.6*maxTo) c.raiseTo=maxTo;
     c.raiseTo=Math.min(maxTo,Math.max(minTo,c.raiseTo));
@@ -1534,7 +1538,7 @@ function gradePost(h,hs,a,amt){
     else if(m==='R') g=2;
     else g= a==='X'||e>=c.Vt-T?2:(!c.noBluff&&(c.s<3?e>=.2&&e<.5:e<.25)?1:0);
   } else {
-    text=`Колл ${c.toCall} в банк ${c.pot}: нужно ${pctS(c.po)} эквити${c.adj?` (≈ ${pctS(c.callT)} с учётом следующих улиц)`:''}. Твоё эквити ${vs} ${pctS(e)}${e>=c.Rt&&c.canRaise?`, это выше порога рейза ${pctS(c.Rt)}`:''}. ${m==='R'?'Рейз за вэлью.':m==='C'?'Колл.':'Фолд.'}`;
+    text=`Колл ${c.toCall} в банк ${c.pot}: нужно ${pctS(c.po)} эквити${c.adj?`, а без позиции ≈ ${pctS(c.callT)}: часть эквити не реализуется на следующих улицах`:''}. Твоё эквити ${vs} ${pctS(e)}${e>=c.Rt&&c.canRaise?`, это выше порога рейза ${pctS(c.Rt)}`:''}. ${m==='R'?'Рейз за вэлью.':m==='C'?'Колл.':'Фолд.'}`;
     if(a===m) g=2;
     else if(m==='R'&&a==='C') g= e<c.Rt+T?2:1;
     else if(m==='C'&&a==='R') g= e>=c.Rt-.06?1:0;
