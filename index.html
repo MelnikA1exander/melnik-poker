@@ -1839,8 +1839,8 @@ function sizeTells(run){ const G={open:[],vsopen:[],vs3b:[]};
 function repStats(run){ const out=[]; run.hands.forEach((h,i)=>{ if(h.rep==null) return; const o=run.hands[h.rep-1]; if(!o) return;
   const a=h.decisions.find(x=>!x.post), b=o.decisions.find(x=>!x.post); if(!a||!b) return;
   out.push({h:a.h,pos:a.pos,same:a.a===b.a,a1:b.a==='R'?RAISE_NAME[b.d.kind]:actWord(b.a,b.d),a2:a.a==='R'?RAISE_NAME[a.d.kind]:actWord(a.a,a.d),n1:h.rep,n2:i+1}); }); return out; }
-// соответствие GTO по модели сложности (IRT): у решения сложность тем выше, чем ближе рука к границе GTO;
-// ошибка на лёгком решении сильно тянет вниз, верный ответ на сложном сильно поднимает
+// соответствие GTO с учётом сложности: у решения сложность тем выше, чем ближе рука к границе GTO;
+// балл — взвешенная доля верных решений: сложные весят 2, средние 1, лёгкие 0,5
 function irtScore(run){ const items=[];
   for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue; const pos=HPOS[x.h];
     const qp=widthOf(x.d.ch,['R','C','RC','RF','CF']), qr=widthOf(x.d.ch,['R','RC','RF']);
@@ -1853,6 +1853,7 @@ function irtScore(run){ const items=[];
   for(let t=-6;t<=8;t+=.02){ let ll=-t*t/(2*2*2); for(const it of items){ const p=Math.min(.999,Math.max(.001,sig(t-it.b))); ll+=it.y*Math.log(p)+(1-it.y)*Math.log(1-p); } if(ll>bl){ bl=ll; th=t; } }
   let sc=0; const B=[]; for(let i=0;i<10;i++) B.push(-2.5+4.5*i/9); for(const b of B) sc+=sig(th-b); sc/=B.length;
   const easy=items.filter(i=>i.b<-1), hard=items.filter(i=>i.b>.5);
+  { const w=i=>i.b<-1?.5:i.b>.5?2:1; let W=0,Y=0; for(const i of items){ W+=w(i); Y+=w(i)*i.y; } sc=Y/W; }
   return {score:sc*100,theta:th,n:items.length,easyMiss:easy.filter(i=>i.y===0).length,easyN:easy.length,hardHit:hard.filter(i=>i.y>0).length,hardN:hard.length}; }
 // тип игрока по отклонениям D, ширине V/Vg и агрессии P/V; acc — доля верных решений, %
 // координаты стиля: X — насколько шире (+) или уже (−) GTO игрок входит в банк (по границам диапазонов, ±1 — в 2,8 раза);
@@ -2145,7 +2146,7 @@ const plw=(n,a,b,c)=>{ const m=n%10, h=n%100; return m===1&&h!==11?a:m>=2&&m<=4&
 // короткий итог теста в сравнении с GTO: 3–5 фраз с цифрами
 function resSummary(A,run){ const F=A.F, TP=profTips(A,run), out=[], r=x=>Math.round(x), nh=run.hands.length;
   const sc=A.irt?r(A.irt.score):null;
-  if(A.nDec){ const lv=sc==null?'':sc>=90?' Это очень близко к оптимальной стратегии.':sc>=75?' Крепкая база, но есть заметные утечки.':sc>=60?' Игра заметно отличается от оптимальной.':' Пока далеко от оптимальной стратегии.';
+  if(A.nDec){ const lv=sc==null?'':sc>=88?' Это очень близко к оптимальной стратегии.':sc>=70?' Крепкая база, но есть заметные утечки.':sc>=55?' Игра заметно отличается от оптимальной.':' Пока далеко от оптимальной стратегии.';
     out.push(`За ${nh} ${plw(nh,'раздачу','раздачи','раздач')} ${A.good} из ${A.nDec} решений совпали с GTO${sc!=null?`, с учётом сложности решений — ${sc}%`:''}.${lv}`); }
   const fl=F.fo?F.fp.length/F.fo:0, ft=F.po?F.pf.length/F.po:0, fa=F.ar.length;
   const sty=[]; if(F.fo>=5&&fl>=.2) sty.push(`из ${F.fo} ${plw(F.fo,'руки','рук','рук')}, которые GTO сбрасывает, ты сыграл ${F.fp.length}`);
@@ -2263,7 +2264,7 @@ function renderResults(){ syncRun();
     v.appendChild(g); }
   if(A.irt){ const g=document.createElement('div'); g.className='gtobar'; const sc=Math.round(A.irt.score);
     g.innerHTML=`<div class="gtohead"><span>Соответствие GTO</span><b>${sc}%</b></div><div class="gtotrack"><i style="width:${sc}%"></i></div><p class="hint"></p>`;
-    g.querySelector('.hint').textContent=`Учитывает сложность решений. Лёгкие решения (рука далеко от границы диапазона): ошибок ${A.irt.easyMiss} из ${A.irt.easyN}. Сложные (у самой границы): ошибок ${A.irt.hardN-A.irt.hardHit} из ${A.irt.hardN}.`;
+    g.querySelector('.hint').textContent=`Учитывает сложность решений: сложные весят вдвое больше, лёгкие вдвое меньше. Лёгкие решения (рука далеко от границы диапазона): ошибок ${A.irt.easyMiss} из ${A.irt.easyN}. Сложные (у самой границы): ошибок ${A.irt.hardN-A.irt.hardHit} из ${A.irt.hardN}.`;
     v.appendChild(g); }
   const st=document.createElement('div'); st.className='pstats';
   const dv=k=>{ const [x,o]=A.dev[k]; return o<.5?'—':pc(x/o*100); };
