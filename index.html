@@ -1745,14 +1745,15 @@ function recDecision(h,d,a,amt){
     h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,lim:d.level===0?h.callers:null,
     open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,callers:d.level>=1?h.callers:null,
     cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,ok:h.decisions[h.decisions.length-1].al,n:RUN.hands.length+1,s:sitOf(h,{d}),rep:h.rep||null,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
-  RS.updated=Date.now(); }
-// личный журнал «Префлопа»: пишется в отдельный лист базы, в статистику аккаунта не попадает
+  RS.updated=Date.now(); if(AUTH) persist(RS); } // сохраняем после каждого решения: раздачи попадают в профиль, даже если тест не доигран
+// личный журнал «Префлопа»: пишется в отдельный лист базы после каждого решения; в профиле идёт в раздачи и точность
 let PS=null; const PS_MAX=200, PS_GAP=30*60*1000;
 function pfDecision(h,d,a,amt){
   if(REC||GAME!=='pre'||!AUTH||!ENDPOINT||h.street>0) return;
   const now=Date.now(); if(!PS||PS.dec.length>=PS_MAX||now-PS.updated>PS_GAP) PS={action:'preflop',id:'pf'+now.toString(36)+Math.random().toString(36).slice(2,6),started:now,updated:now,dec:[]};
   const x=h.decisions[h.decisions.length-1], o=d.level>=1?h.raisers[0]:null;
-  PS.dec.push({t:now,m:MODE,N,pos:lab(h.hero),h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,
+  if(h.hn==null) h.hn=now; // номер раздачи: сервер по нему считает раздачи
+  PS.dec.push({t:now,hn:h.hn,m:MODE,N,pos:lab(h.hero),h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,
     open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,toCall:d.toCall,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,g:x.g,ok:x.al});
   PS.updated=now; persist(PS); }
 let dbBusy=false; const dbQ=new Map();
@@ -2572,14 +2573,14 @@ function openProfile(){
   const cards=card.querySelector('.pcards'), note=card.querySelector('#pnote'); let R=null, st='load';
   const ZERO={sessions:0,hands:0,gto:0,acc:0,vpip:0,pfr:0,type:''};
   const draw=()=>{ for(const b of card.querySelectorAll('#pper button')) b.setAttribute('aria-pressed',b.dataset.p===PPER);
-    const T=Object.assign({},ZERO,R&&(R[PPER]||(PPER==='last300'?R.all:null))||{}), v=x=>(x==null?0:x)+'%', HT=HTP[PPER], HN=HNP[PPER];
+    const T=Object.assign({},ZERO,R&&(R[PPER]||(PPER==='last300'?R.all:null))||{}), v=x=>x==null?'—':x+'%', HT=HTP[PPER], HN=HNP[PPER];
     cards.innerHTML=`<div><b>${v(T.gto)}</b><span>GTO</span></div><div><b>${v(T.acc)}</b><span>правильных решений</span></div>`
       +`<div><b>${v(T.vpip)}</b><span>VPIP</span></div><div><b>${v(T.pfr)}</b><span>PFR</span></div>`
       +`<div><b>${T.hands}</b><span>раздач</span></div><div><b>${T.sessions}</b><span>тестов</span></div>`;
     const locked=hst!=='load'&&(!HT||HN<XY_MIN);
     card.querySelector('#ptype').textContent=hst==='load'?'…':locked?'Тип пока не определён':HT.type;
     card.querySelector('#pxy').replaceChildren(hst==='load'?xyPlot(null,true,0,null,true):xyPlot(HT&&HT.xy,locked,HN,HT&&HT.sz));
-    note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.sessions?'Учитываются только завершённые GTO тесты.':'Пока нет завершённых тестов. Пройди GTO тест до конца, и здесь появится статистика.'; };
+    note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.hands?'Раздачи и точность — по всем раздачам: тесты, в том числе недоигранные, и «Префлоп». GTO, VPIP и PFR — по завершённым тестам.':'Пока нет раздач. Сыграй тест или несколько раздач в «Префлопе», и здесь появится статистика.'; };
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{

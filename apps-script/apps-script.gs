@@ -157,11 +157,11 @@ function logout_(x) {
 function saveSession_(x) {
   if (!x || !x.id) return { ok: false, error: 'no id' };
   if (/^pf/.test(String(x.id))) return { ok: false, error: 'preflop' }; // журнал «Префлопа» в «Сессии» не пишем
-  // пока записываем только завершённые тесты «Профиля»
-  if ((x.summary && x.summary.hands || (x.dec || []).length) < PROF_N) return { ok: false, error: 'unfinished' };
+  // тест пишется после каждого решения: незавершённый тоже сохраняется и попадает в профиль (раздачи и точность)
   const a = auth_(x.token);
   const s = x.summary || {}, dec = x.dec || [];
-  const hands = s.hands || dec.length;
+  if (!dec.length) return { ok: true };
+  const hands = s.hands || decStats_(dec).hands;
   const vpip = s.vpip != null ? s.vpip : (s.play != null && hands ? Math.round(s.play / hands * 100) : '');
   const pfr = s.pfr != null ? s.pfr : (s.raise != null && hands ? Math.round(s.raise / hands * 100) : '');
   const limps = s.limps != null ? s.limps : dec.filter(d => d.k === 'open' && d.a === 'C').length;
@@ -174,8 +174,12 @@ function saveSession_(x) {
   const sh = sh_(SHEET, HEAD);
   const ids = sh.getRange(1, 2, sh.getLastRow(), 1).getValues().map(r => String(r[0]));
   const at = ids.indexOf(String(x.id));
-  if (at > 0) sh.getRange(at + 1, 1, 1, row.length).setValues([row]);
-  else { append_(sh, [row]); addHands_(String(x.id), a ? a.login : String(x.name || ''), dec); }
+  if (at > 0) {
+    // в «Раздачи профиля» дописываем только новые решения
+    let had = 0; try { had = JSON.parse(sh.getRange(at + 1, 12).getValue() || '[]').length; } catch (e) {}
+    sh.getRange(at + 1, 1, 1, row.length).setValues([row]);
+    if (dec.length > had) addHands_(String(x.id), a ? a.login : String(x.name || ''), dec, had);
+  } else { append_(sh, [row]); addHands_(String(x.id), a ? a.login : String(x.name || ''), dec, 0); }
   if (a) updRecent_(a, String(x.id), 'Профиль', dec);
   return { ok: true };
 }
@@ -208,8 +212,22 @@ function handRows_(id, login, dec) {
     return [d.t ? new Date(d.t) : '', login + '/' + id + '/' + n, parts.join(' · ')];
   });
 }
-function addHands_(id, login, dec) {
-  append_(sh_(HANDS, HANDS_HEAD), handRows_(id, login, dec || []));
+function addHands_(id, login, dec, from) {
+  const rows = handRows_(id, login, dec || []).slice(from || 0);
+  if (rows.length) append_(sh_(HANDS, HANDS_HEAD), rows);
+}
+// раздачи и точность по списку решений: раздача — по номеру n/hn из клиента, у старых записей — по смене карт или позиции
+function decStats_(dec) {
+  let hands = 0, prev = null, pts = 0, n = 0;
+  (dec || []).forEach(d => {
+    if (!d) return;
+    const key = d.n != null ? 'n' + d.n : d.hn != null ? 'h' + d.hn : (d.c || d.h) + '|' + d.pos;
+    if (key !== prev) hands++;
+    prev = key;
+    const g = d.gr != null ? d.gr : d.g;
+    if (g != null) { n++; pts += g === 2 ? 1 : g === 1 ? .5 : 0; }
+  });
+  return { hands, acc: n ? Math.round(pts / n * 100) : null };
 }
 // Пересобирает «Раздачи профиля» из всех тестов в «Сессиях». Повторный запуск безопасен.
 function rebuildHands() {
@@ -336,14 +354,24 @@ function stats_(x) {
   // колонку «Решения (JSON)» (самую тяжёлую) не читаем: берём A:K и аккаунт из M
   const sh = sh_(SHEET, HEAD), cnt = sh.getLastRow() - 1;
   const base = cnt > 0 ? sh.getRange(2, 1, cnt, 11).getValues() : [], accs = cnt > 0 ? sh.getRange(2, 13, cnt, 1).getValues() : [];
-  const list = base.map((r, i) => r.concat(['', accs[i][0]]))
-    .filter(r => String(r[12]) === a.key && +r[4] >= PROF_N && !/^pf/.test(String(r[1]))) // pf… — журнал «Префлопа», попавший сюда со старой версией скрипта
-    .map(r => {
-      let sm = {}; try { sm = JSON.parse(r[10] || '{}'); } catch (e) {}
-      return { date: r[3] ? new Date(r[3]).getTime() : new Date(r[0]).getTime(), hands: +r[4], type: String(r[5]),
-        gto: num(sm.gto), acc: num(r[9]), vpip: num(r[6]), pfr: num(r[7]) };
-    })
-    .sort((p, q) => p.date - q.date);
+  // завершённые тесты дают всё; незавершённые тесты и «Префлоп» — только раздачи и точность
+  // (их раздачи подобраны тестом или фильтрами, поэтому VPIP, PFR и GTO по ним не считаем)
+  const list = [];
+  base.forEach((r, i) => {
+    if (String(accs[i][0]) !== a.key || /^pf/.test(String(r[1]))) return; // pf… — журнал «Префлопа», попавший сюда со старой версией скрипта
+    const date = r[3] ? new Date(r[3]).getTime() : new Date(r[0]).getTime();
+    let sm = {}; try { sm = JSON.parse(r[10] || '{}'); } catch (e) {}
+    if (+r[4] >= PROF_N && sm.type) list.push({ date, test: true, hands: +r[4], type: String(r[5]), gto: num(sm.gto), acc: num(r[9]), vpip: num(r[6]), pfr: num(r[7]) });
+    else { let d = []; try { d = JSON.parse(sh.getRange(i + 2, 12).getValue() || '[]'); } catch (e) {} const st = decStats_(d);
+      if (st.hands) list.push({ date, hands: st.hands, type: '', gto: null, acc: st.acc, vpip: null, pfr: null }); }
+  });
+  rows_(sh_(PF, PF_HEAD)).forEach(r => {
+    if (key_(r[2]) !== a.key) return;
+    let d = []; try { d = JSON.parse(r[7] || '[]'); } catch (e) { return; }
+    const st = decStats_(d);
+    if (st.hands) list.push({ date: r[3] ? new Date(r[3]).getTime() : new Date(r[0]).getTime(), hands: st.hands, type: '', gto: null, acc: st.acc, vpip: null, pfr: null });
+  });
+  list.sort((p, q) => p.date - q.date);
   const lastN = N => { const out = []; let n = 0; for (let i = list.length - 1; i >= 0 && n < N; i--) { out.unshift(list[i]); n += list[i].hands; } return out; };
   return { ok: true, login: a.login, all: total_(list), last300: total_(lastN(300)), last100: total_(lastN(100)) };
 }
@@ -353,5 +381,5 @@ function total_(list) {
   // тип: самый частый среди тестов периода, при равенстве — более свежий
   const cnt = {}; let type = '', best = 0;
   list.forEach((r, i) => { if (!r.type) return; cnt[r.type] = (cnt[r.type] || 0) + 1 + i * 1e-6; if (cnt[r.type] >= best) { best = cnt[r.type]; type = r.type; } });
-  return { sessions: list.length, hands: list.reduce((t, r) => t + r.hands, 0), gto: avg('gto'), acc: avg('acc'), vpip: avg('vpip'), pfr: avg('pfr'), type };
+  return { sessions: list.filter(r => r.test).length, hands: list.reduce((t, r) => t + r.hands, 0), gto: avg('gto'), acc: avg('acc'), vpip: avg('vpip'), pfr: avg('pfr'), type };
 }
