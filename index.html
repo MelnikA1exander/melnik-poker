@@ -328,6 +328,25 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .cfc{max-width:380px;gap:10px}.cfc .cft{font:700 18px var(--f-body)}.cfc p{color:var(--muted);font-size:14px;margin:0}
 .cfrow{display:flex;gap:8px;margin-top:6px}.cfrow button{flex:1;font:700 15px var(--f-body);border-radius:12px;padding:11px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
 .cfrow .yes{background:var(--raise);color:#fff;border-color:var(--raise)}
+.xyplot{position:relative;display:grid;gap:4px;justify-items:center;max-width:420px;width:100%;margin:0 auto}
+.xyrow{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;width:100%}
+.xyplot svg{width:100%;height:auto;display:block}
+.xyax{font:600 11px var(--f-body);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.xyax.xl,.xyax.xr{writing-mode:vertical-rl}.xyax.xl{transform:rotate(180deg)}
+.xytag{font:700 11px var(--f-body);text-transform:uppercase;letter-spacing:.07em;color:var(--orange);border:1px solid var(--orange);border-radius:999px;padding:3px 10px;margin-bottom:4px}
+.xyplot .bg{fill:var(--sunk);stroke:var(--line)}
+.xyplot .zl line{stroke:var(--line);stroke-dasharray:3 4}
+.xyplot .axis{stroke:var(--muted);stroke-opacity:.45}
+.xyplot .zt text{font:500 11px var(--f-body);fill:var(--muted);fill-opacity:.75;text-anchor:middle;dominant-baseline:middle}
+.xyplot .gto circle{fill:var(--good)}.xyplot .gto text{font:700 11px var(--f-mono);fill:var(--good)}
+.xyplot .pt{fill:var(--raise);stroke:var(--surface);stroke-width:3}
+.xyplot .area{fill:var(--raise);fill-opacity:.2;stroke:var(--raise);stroke-width:2;stroke-dasharray:5 4}
+.xyplot .ctr{fill:var(--raise)}
+.xycap{margin:2px 0 0;font-size:13px;color:var(--muted);text-align:center}
+.xyplot.locked svg{filter:blur(2px);opacity:.55}
+.xylock{position:absolute;inset:18% 10%;display:grid;place-content:center;gap:6px;text-align:center;background:color-mix(in srgb,var(--surface) 88%,transparent);border:1px solid var(--line);border-radius:14px;padding:14px}
+.xylock b{font:700 16px var(--f-body)}.xylock span{font-size:13px;color:var(--muted)}
+.ptype2{font:700 22px/1.2 var(--f-display);margin:0;text-align:center}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -1593,7 +1612,7 @@ function profEst(run,L0=2,k=1.2){ const C=curPts(run), Hh=histPts(), E={};
     const cl={}; for(const kk of Object.keys(HCLS)){ const cc=c.filter(p=>p.c===kk), hc=hh.filter(p=>p.c===kk);
       const fk=cc.length||hc.length?fitW(mixPts(cc,hc,3).pts,f.t,.1,'y'):{t:f.t,sd:.1};
       cl[kk]={n:cc.length,nh:hc.length,t:fk.t,sd:fk.sd,near:cc.filter(p=>Math.abs(p.pos-fk.t)<.1).length,avail:CLSH[kk].some(x=>Math.abs(HPOS[x]-fk.t)<.1)}; }
-    E[sg]={n:c.length,nh:hh.length,hw:M.hw,q,qr,t:f.t,sd:f.sd,tr:Math.min(f.t,fr.t),cls:cl,ch}; }
+    E[sg]={n:c.length,nh:hh.length,hw:M.hw,q,qr,t:f.t,sd:f.sd,sdr:fr.sd,tr:Math.min(f.t,fr.t),cls:cl,ch}; }
   E._L=L; E._nh=Hh.length; return E; }
 // сколько решений каждой ситуации хотим за тест; остальное добирается туда, где граница известна хуже всего
 const SQUOTA={'open-EP':6,'open-MP':6,'open-LP':5,'open-SB':5,'def-BB':6,'def-SB':5,'def-IP':6,'vs3b':5};
@@ -1767,6 +1786,47 @@ function irtScore(run){ const items=[];
   const easy=items.filter(i=>i.b<-1), hard=items.filter(i=>i.b>.5);
   return {score:sc*100,theta:th,n:items.length,easyMiss:easy.filter(i=>i.y===0).length,easyN:easy.length,hardHit:hard.filter(i=>i.y>0).length,hardN:hard.length}; }
 // тип игрока по отклонениям D, ширине V/Vg и агрессии P/V; acc — доля верных решений, %
+// координаты стиля: X — насколько шире (+) или уже (−) GTO игрок входит в банк (по границам диапазонов, ±1 — в 2,8 раза);
+// Y — агрессия: доля рейзов там, где GTO коллирует или сбрасывает, минус доля коллов там, где GTO рейзит (±1 — всегда). Ситуации весят как в квоте теста,
+// чтобы точки теста и профиля были сравнимы; sx, sy — погрешность (1σ) из оценок границ.
+const XY_KX=1.5, XY_KY=2, clamp1=v=>Math.max(-1,Math.min(1,v));
+function styleXY(fits,D){ let W=0,V=0,Vg=0,P=0,Pg=0,vV=0,vP=0;
+  for(const f of fits){ const w=SQUOTA[f.sg]||0; if(!w) continue; W+=w; V+=w*f.t; Vg+=w*f.q; P+=w*f.tr; Pg+=w*f.qr; vV+=(w*f.sd)**2; vP+=(w*(f.sdr||f.sd))**2; }
+  if(!W||!Vg||!Pg) return null; V/=W; Vg/=W; P/=W; Pg/=W; const sV=Math.sqrt(vV)/W, sP=Math.sqrt(vP)/W, Vs=Math.max(.02,V), Ps=Math.max(.01,Math.min(P,V));
+  const rx=Vs/Vg, ag=(D.a+.05)/(D.ao+1), pa=(D.p+.05)/(D.po+1);
+  return {x:clamp1(Math.log2(rx)/XY_KX),y:clamp1(ag-pa),sx:sV/Vs/Math.LN2/XY_KX,sy:Math.sqrt(ag*(1-ag)/(D.ao+1)+pa*(1-pa)/(D.po+1)),
+    vx:Math.round((rx-1)*100),ag:Math.round(ag*100),pa:Math.round(pa*100)}; }
+// тип по зоне на плоскости координат; «непоследовательный» — по отклонениям в обе стороны (классификатор ниже)
+const XY_NM={tight:{passive:'Камень (тайтово-пассивный)',bal:'Нит',aggr:'Нит, агрессивный'},
+  ok:{passive:'Пассивный',bal:'TAG',aggr:'TAG, агрессивный'},
+  loose:{passive:'Фиш (лузово-пассивный)',bal:'Лузовый',aggr:'LAG, лузово-агрессивный'},
+  wild:{passive:'Колл-стейшн',bal:'Очень лузовый',aggr:'Маньяк'},
+  mixed:{passive:'Непоследовательный, пассивный',bal:'Непоследовательный',aggr:'Непоследовательный, агрессивный'}};
+function zoneOf(xy){ const w=xy.x<-.32?'tight':xy.x<=.3?'ok':xy.x<=.66?'loose':'wild', st=xy.y<-.3?'passive':xy.y>.3?'aggr':'bal'; return [w,st]; }
+function xyType(xy,mixed,acc){ const [w,st]=zoneOf(xy), W=mixed?'mixed':w; let nm=XY_NM[W][st]; if(nm==='TAG') nm=acc>=80?'TAG, регуляр':'TAG, тайтово-агрессивный'; return {width:W,style:st,name:nm}; }
+// график стиля: точка, когда погрешность мала (2σ ≤ 0,1 по обеим осям), иначе область 95%; locked — заглушка для нового аккаунта
+const XY_MIN=50;
+function xyPlot(xy,locked,n){ const S=300, m=S/2, k=(S/2-18), X=v=>m+v*k, Y=v=>m-v*k;
+  const w=document.createElement('div'); w.className='xyplot'+(locked?' locked':'');
+  const zl=[[-.32,'v'],[.3,'v'],[.66,'v'],[-.3,'h'],[.3,'h']].map(([v,o])=>o==='v'?`<line x1="${X(v)}" y1="${Y(1)}" x2="${X(v)}" y2="${Y(-1)}"/>`:`<line x1="${X(-1)}" y1="${Y(v)}" x2="${X(1)}" y2="${Y(v)}"/>`).join('');
+  const zt=[[-.66,.66,'Нит'],[0,.66,'TAG'],[.48,.66,'LAG'],[.83,.66,'Маньяк'],[-.66,-.66,'Камень'],[0,-.66,'Пассивный'],[.48,-.66,'Фиш'],[.83,-.66,'Колл-<tspan x="'+X(.83)+'" dy="12">стейшн</tspan>'],[-.66,0,'Нит'],[.48,0,'Лузовый'],[.83,0,'Очень<tspan x="'+X(.83)+'" dy="12">лузовый</tspan>']]
+    .map(([x,y,t])=>`<text x="${X(x)}" y="${Y(y)}">${t}</text>`).join('');
+  let mark='';
+  if(xy&&!locked){ const rx=Math.max(.05,2*xy.sx), ry=Math.max(.05,2*xy.sy), pt=2*xy.sx<=.1&&2*xy.sy<=.1;
+    mark=pt?`<circle class="pt" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="9"/>`:`<ellipse class="area" cx="${X(xy.x)}" cy="${Y(xy.y)}" rx="${Math.min(1.2,rx)*k}" ry="${Math.min(1.2,ry)*k}"/><circle class="ctr" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="3.5"/>`;
+    w.dataset.mode=pt?'point':'area'; }
+  w.innerHTML=`<div class="xytag">Префлоп профиль</div><div class="xyax xt">Агрессивный</div><div class="xyrow"><div class="xyax xl">Тайтовый</div>
+    <svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Координаты стиля игры"><rect class="bg" x="${X(-1)}" y="${Y(1)}" width="${2*k}" height="${2*k}" rx="10"/>
+    <g class="zl">${zl}</g><line class="axis" x1="${X(-1)}" y1="${m}" x2="${X(1)}" y2="${m}"/><line class="axis" x1="${m}" y1="${Y(1)}" x2="${m}" y2="${Y(-1)}"/>
+    <g class="zt">${zt}</g><g class="gto"><circle cx="${m}" cy="${m}" r="4"/><text x="${m+7}" y="${m-7}">GTO</text></g>${mark}</svg>
+    <div class="xyax xr">Лузовый</div></div><div class="xyax xb">Пассивный</div>`;
+  if(locked){ const o=document.createElement('div'); o.className='xylock'; o.innerHTML='<b>Координаты пока не определены</b><span></span>';
+    o.lastChild.textContent=`Сыграй 50+ раздач в режимах «GTO тест» или «Префлоп». Сейчас: ${n||0} из ${XY_MIN}.`; w.appendChild(o); }
+  else if(xy){ const c=document.createElement('p'); c.className='xycap';
+    const sg=v=>(v>0?'+':v<0?'−':'')+Math.abs(v);
+    c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям.':'Область — где вероятнее всего твой стиль; с каждой игрой она уточняется и может смещаться.');
+    w.appendChild(c); }
+  return w; }
 function classifyType(D,V,Vg,P,Pg,acc){
   const rate=(x,o,pr=.15,k=1.5)=>(x+pr*k)/(o+k); // доля с мягким априорным ожиданием, чтобы 1 из 1 не давало 100%
   const lo=rate(D.l,D.lo), ti=rate(D.t,D.to), pa=rate(D.p,D.po,.2), ag=rate(D.a,D.ao,.1);
@@ -1793,11 +1853,13 @@ function histType(rows){ rows=(rows||[]).filter(r=>r&&HPOS[r.h]!=null&&Array.isA
     if(pPlay&&gPlay&&gRaise&&!gNoRaise){ D.po+=w; if(r.a==='C') D.p+=w; }
     if(pPlay&&gNoRaise&&!gRaise){ D.ao+=w; if(r.a==='R') D.a+=w; }
     if(sg) (SG[sg]=SG[sg]||[]).push({pos:HPOS[r.h],y:pPlay,yr:r.a==='R',w}); });
-  let V=0,Vg=0,P=0,Pg=0,FW=0;
-  for(const sg in SG){ const pts=SG[sg], fw=pts.reduce((x,p)=>x+p.w,0), f=fitW(pts,SITQ[sg].q,.15,'y'), fr=fitW(pts,SITQ[sg].qr,.15,'yr');
+  let V=0,Vg=0,P=0,Pg=0,FW=0; const fits=[];
+  for(const sg of Object.keys(SIT)){ const pts=SG[sg]||[], fw=pts.reduce((x,p)=>x+p.w,0), f=fitW(pts,SITQ[sg].q,.15,'y'), fr=fitW(pts,SITQ[sg].qr,.15,'yr');
+    fits.push({sg,t:f.t,sd:f.sd,tr:Math.min(f.t,fr.t),sdr:fr.sd,q:SITQ[sg].q,qr:SITQ[sg].qr});
     V+=fw*f.t; Vg+=fw*SITQ[sg].q; P+=fw*Math.min(f.t,fr.t); Pg+=fw*SITQ[sg].qr; FW+=fw; }
   if(FW){ V/=FW; Vg/=FW; P/=FW; Pg/=FW; }
-  return {type:classifyType(D,V,Vg,P,Pg,tw?good/tw*100:0).name,n}; }
+  const acc=tw?good/tw*100:0, C0=classifyType(D,V,Vg,P,Pg,acc), xy=styleXY(fits,D);
+  return {type:xy?xyType(xy,C0.width==='mixed',acc).name:C0.name,n,xy}; }
 function profAnalyze(run){
   const G={}; let nDec=0,good=0; const errs={}, outs=[]; const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0};
   const F={fo:0,fp:[],po:0,pf:[],ro:0,rc:[],ao:0,ar:[],lo:0,lim:0,vo:0,v3:0,vc:0,vf:0,g3:0,gc:0,gf:0,to:0,tf:0,tc:0,t4:0,bp:0,bpf:0,bf:0,bfp:0,tp:0,tpf:0};
@@ -1836,7 +1898,7 @@ function profAnalyze(run){
   if(FW){ V/=FW; Vg/=FW; P/=FW; Pg/=FW; }
   rows.sort((a,b)=>Object.keys(SIT).indexOf(a.sg)-Object.keys(SIT).indexOf(b.sg));
   const L=Vg?V/Vg:1, acc=nDec?good/nDec*100:0;
-  const {lo,ti,pa,ag,width,style,name}=classifyType(D,V,Vg,P,Pg,acc);
+  const C0=classifyType(D,V,Vg,P,Pg,acc), {lo,ti,pa,ag}=C0, xy=styleXY(Object.keys(SIT).map(sg=>Object.assign({sg},E[sg])),D), {width,style,name}=xy?xyType(xy,C0.width==='mixed',acc):C0;
   const W1={tight:'Сбрасывает часть рук, которые по GTO надо играть',ok:'Отбор рук близок к GTO',loose:'Играет заметную часть рук, которые по GTO надо сбрасывать',wild:'Играет большинство рук, которые по GTO надо сбрасывать',mixed:'Одновременно играет лишние руки и сбрасывает хорошие, то есть выбирает не те руки'}[width];
   const W2={passive:'часто коллирует или лимпует там, где GTO рейзит',bal:'с рейзами и коллами в целом как по GTO',aggr:'часто рейзит там, где GTO коллирует или сбрасывает'}[style];
   const T=[name,`${W1}, ${W2}.`];
@@ -1861,7 +1923,7 @@ function profAnalyze(run){
   if(F.lo) facts.push(F.lim?`Лимпил первым в банк ${F.lim} раз из ${F.lo}.`:`Первым в банк ни разу не лимпил (${F.lo} раз из ${F.lo} рейз или фолд).`);
   if(F.vo) facts.push(`Против опена (${F.vo} раз): 3-бет ${F.v3}, колл ${F.vc}, фолд ${F.vf}.`);
   if(F.to) facts.push(`Против 3-бета (${F.to} раз): 4-бет ${F.t4}, колл ${F.tc}, фолд ${F.tf}.`);
-  return {outs,nh:E._nh,tells:sizeTells(run),reps:repStats(run),irt:irtScore(run),facts,V:V*100,Vc:Vg*100,P:P*100,Pc:Pg*100,L,acc,nDec,good,type:T[0],short:T[1],conf,traits,rows,ranked,lo,ti,pa,ag,dev};
+  return {xy,outs,nh:E._nh,tells:sizeTells(run),reps:repStats(run),irt:irtScore(run),facts,V:V*100,Vc:Vg*100,P:P*100,Pc:Pg*100,L,acc,nDec,good,type:T[0],short:T[1],conf,traits,rows,ranked,lo,ti,pa,ag,dev};
 }
 function renderResults(){ syncRun();
   const p=$('#panel'); p.innerHTML=''; const run=RUN, A=profAnalyze(run), pc=x=>Math.round(x)+'%';
@@ -1870,8 +1932,12 @@ function renderResults(){ syncRun();
     sizing:A.tells.map(t=>t.txt),reps:A.reps.map(r=>({h:r.h,pos:r.pos,same:r.same,a1:r.a1,a2:r.a2})),outs:A.outs}; RS.updated=Date.now(); save(); persist(RS); }
   const v=document.createElement('section'); v.className='verdict res'; v.id='results';
   const hd=document.createElement('div'); hd.innerHTML='<p class="psub"></p><h2 class="ptype"></h2><p class="psub"></p>';
-  hd.children[0].textContent=`Профиль игрока «${run.name}»`; hd.children[1].textContent=A.type; hd.children[2].textContent=`VPIP ${pc(A.V)} (по GTO ${pc(A.Vc)}), PFR ${pc(A.P)} (по GTO ${pc(A.Pc)}). Уверенность оценки: ${A.conf}.`;
+  hd.children[0].textContent=`Префлоп профиль игрока «${run.name}»`; hd.children[1].textContent=A.type; hd.children[2].textContent=`VPIP ${pc(A.V)} (по GTO ${pc(A.Vc)}), PFR ${pc(A.P)} (по GTO ${pc(A.Pc)}). Уверенность оценки: ${A.conf}.`;
   v.appendChild(hd);
+  { const cur=[]; for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue; cur.push({pos:x.pos,h:x.h,k:x.d.kind,a:x.a,amt:x.amt||0,ok:x.al,toCall:x.d.toCall,N}); }
+    const rows=(HIST.rows||[]).concat(cur).slice(-300), HT=histType(rows);
+    if(HT){ hd.children[1].textContent=HT.type; v.appendChild(xyPlot(HT.xy,rows.length<XY_MIN,rows.length));
+      const c=document.createElement('p'); c.className='hint'; c.style.cssText='margin:0;text-align:center'; c.textContent=`Тип и координаты — по последним ${rows.length} решениям (этот тест и прошлые игры на аккаунте), свежие весят больше.`; v.appendChild(c); } }
   if(A.irt){ const g=document.createElement('div'); g.className='gtobar'; const sc=Math.round(A.irt.score);
     g.innerHTML=`<div class="gtohead"><span>Соответствие GTO</span><b>${sc}%</b></div><div class="gtotrack"><i style="width:${sc}%"></i></div><p class="hint"></p>`;
     g.querySelector('.hint').textContent=`Учитывает сложность решений. Лёгкие решения (рука далеко от границы диапазона): ошибок ${A.irt.easyMiss} из ${A.irt.easyN}. Сложные (у самой границы): верно ${A.irt.hardHit} из ${A.irt.hardN}.`;
@@ -2167,8 +2233,8 @@ let PPER='last100';
 function openProfile(){
   const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
   const card=document.createElement('div'); card.className='sheetcard'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
-  let HT=null, hst='load';
-  card.innerHTML='<div class="sheethead"><div><div class="ctx">Профиль игрока</div><p class="pname"></p></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><div class="seg" id="pper"><button type="button" data-p="last100">Последние 100 раздач</button><button type="button" data-p="all">Всё время</button></div><div class="pcards"></div><p class="hint" id="pnote"></p>';
+  let HT=null, HN=0, hst='load';
+  card.innerHTML='<div class="sheethead"><div><div class="ctx">Префлоп профиль игрока</div><p class="pname"></p></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><h2 class="ptype2" id="ptype"></h2><div id="pxy"></div><div class="seg" id="pper"><button type="button" data-p="last100">Последние 100 раздач</button><button type="button" data-p="all">Всё время</button></div><div class="pcards"></div><p class="hint" id="pnote"></p>';
   card.querySelector('.pname').textContent=AUTH?AUTH.login:'';
   ov.appendChild(card); document.body.appendChild(ov);
   const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); }; card.querySelector('#sheet-close').onclick=close;
@@ -2176,19 +2242,19 @@ function openProfile(){
   const ZERO={sessions:0,hands:0,gto:0,acc:0,vpip:0,pfr:0,type:''};
   const draw=()=>{ for(const b of card.querySelectorAll('#pper button')) b.setAttribute('aria-pressed',b.dataset.p===PPER);
     const T=Object.assign({},ZERO,R&&R[PPER]||{}), v=x=>(x==null?0:x)+'%';
-    cards.innerHTML='<div class="wide"><b></b><span></span></div>'
-      +`<div><b>${v(T.gto)}</b><span>GTO</span></div><div><b>${v(T.acc)}</b><span>правильных решений</span></div>`
+    cards.innerHTML=`<div><b>${v(T.gto)}</b><span>GTO</span></div><div><b>${v(T.acc)}</b><span>правильных решений</span></div>`
       +`<div><b>${v(T.vpip)}</b><span>VPIP</span></div><div><b>${v(T.pfr)}</b><span>PFR</span></div>`
       +`<div><b>${T.hands}</b><span>раздач</span></div><div><b>${T.sessions}</b><span>тестов</span></div>`;
-    cards.querySelector('.wide b').textContent=HT?HT.type:hst==='load'?'…':(R&&R.all&&R.all.type)||'Пока не определён';
-    cards.querySelector('.wide span').textContent=HT?`тип игрока · по последним ${HT.n} решениям, свежие весомее`:'тип игрока';
+    const locked=hst!=='load'&&(!HT||HN<XY_MIN);
+    card.querySelector('#ptype').textContent=hst==='load'?'…':locked?'Тип пока не определён':HT.type;
+    card.querySelector('#pxy').replaceChildren(hst==='load'?'':xyPlot(HT&&HT.xy,locked,HN));
     note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.sessions?'Учитываются только завершённые GTO тесты.':'Пока нет завершённых тестов. Пройди GTO тест до конца, и здесь появится статистика.'; };
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{
     if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); doLogout(); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
     R=r; st='ok'; draw(); }).catch(()=>{ st='err'; draw(); });
-  api('history',{token:AUTH&&AUTH.token}).then(r=>{ HT=r&&r.ok?histType(r.dec):null; hst='ok'; draw(); }).catch(()=>{ hst='err'; draw(); });
+  api('history',{token:AUTH&&AUTH.token}).then(r=>{ const d=r&&r.ok&&Array.isArray(r.dec)?r.dec:[]; HN=d.length; HT=histType(d); hst='ok'; draw(); }).catch(()=>{ hst='err'; draw(); });
 }
 $('#score').onclick=e=>{ if(e.target.id==='profbtn') openProfile(); };
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
