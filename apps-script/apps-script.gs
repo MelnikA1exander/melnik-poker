@@ -6,7 +6,7 @@
 //   login    {login, password}       → {ok, token, login}
 //   me       {token}                 → {ok, login}
 //   logout   {token}                 → {ok}
-//   stats    {token}                 → {ok, login, all, last100} — {sessions, hands, gto, acc, vpip, pfr, type}
+//   stats    {token}                 → {ok, login, all, last300, last100} — {sessions, hands, gto, acc, vpip, pfr, type}
 //   preflop  {token, id, started, dec} → {ok} — личный журнал режима «Префлоп», лист «Префлоп».
 //            Наружу не отдаётся никаким действием и в stats не входит; смотреть только в самой таблице.
 //   history  {token}                 → {ok, dec} — последние ≤300 префлоп-решений игрока (тесты «Профиля» + журнал «Префлопа»)
@@ -342,9 +342,8 @@ function stats_(x) {
         gto: num(sm.gto), acc: num(r[9]), vpip: num(r[6]), pfr: num(r[7]) };
     })
     .sort((p, q) => p.date - q.date);
-  const recent = []; let n = 0;
-  for (let i = list.length - 1; i >= 0 && n < 100; i--) { recent.unshift(list[i]); n += list[i].hands; }
-  return { ok: true, login: a.login, all: total_(list), last100: total_(recent) };
+  const lastN = N => { const out = []; let n = 0; for (let i = list.length - 1; i >= 0 && n < N; i--) { out.unshift(list[i]); n += list[i].hands; } return out; };
+  return { ok: true, login: a.login, all: total_(list), last300: total_(lastN(300)), last100: total_(lastN(100)) };
 }
 
 function total_(list) {
