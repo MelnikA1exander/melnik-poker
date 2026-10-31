@@ -351,7 +351,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 
   <div class="modesrow">
   <div class="seg" id="modes">
-    <button id="m-prof" aria-pressed="true">Профиль</button>
+    <button id="m-prof" aria-pressed="true">GTO тест</button>
     <button id="m-pre" aria-pressed="false" title="Бесконечная тренировка">Префлоп <span class="inf" aria-hidden="true">∞</span></button>
     <button id="m-hand" aria-pressed="false" title="Бета: расчёты после флопа примерные">Полная раздача <span class="soon beta">beta</span></button>
     <button id="m-size" disabled title="Скоро">Сайзинг <span class="soon">скоро</span></button>
@@ -2003,7 +2003,7 @@ const HELP_HTML=`
 <p>Melnik Poker — приложение для тренировки покера по GTO, то есть по математически выверенной стратегии. Ты играешь раздачи и принимаешь решения, а приложение подсказывает, как было бы правильно и почему.</p>
 <h3>Режимы</h3>
 <ul>
-<li><b>Профиль</b> — короткий тест из 50 раздач без подсказок. В конце ты узнаешь свой стиль игры, насколько он близок к GTO и что стоит подтянуть.</li>
+<li><b>GTO тест</b> — короткий тест из 50 раздач без подсказок. В конце ты узнаешь свой стиль игры, насколько он близок к GTO и что стоит подтянуть.</li>
 <li><b>Префлоп</b> — тренировка первого решения в раздаче: играть руку или сбросить, и как именно. После каждого хода сразу разбор.</li>
 <li><b>Полная раздача</b> — раздача до конца, с флопом, тёрном и ривером, и разбор каждого шага.</li>
 </ul>
@@ -2182,7 +2182,7 @@ function openProfile(){
       +`<div><b>${T.hands}</b><span>раздач</span></div><div><b>${T.sessions}</b><span>тестов</span></div>`;
     cards.querySelector('.wide b').textContent=HT?HT.type:hst==='load'?'…':(R&&R.all&&R.all.type)||'Пока не определён';
     cards.querySelector('.wide span').textContent=HT?`тип игрока · по последним ${HT.n} решениям, свежие весомее`:'тип игрока';
-    note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.sessions?'Учитываются только завершённые тесты «Профиля».':'Пока нет завершённых тестов. Пройди «Профиль» до конца, и здесь появится статистика.'; };
+    note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.sessions?'Учитываются только завершённые GTO тесты.':'Пока нет завершённых тестов. Пройди GTO тест до конца, и здесь появится статистика.'; };
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{
