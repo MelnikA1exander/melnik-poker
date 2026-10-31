@@ -329,7 +329,13 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .cfrow{display:flex;gap:8px;margin-top:6px}.cfrow button{flex:1;font:700 15px var(--f-body);border-radius:12px;padding:11px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
 .cfrow .yes{background:var(--raise);color:#fff;border-color:var(--raise)}
 .xyplot{position:relative;display:grid;gap:4px;justify-items:center;max-width:420px;width:100%;margin:0 auto}
-.xyrow{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;width:100%}
+.xyrow{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:6px;width:100%}
+.szbar{display:grid;grid-template-rows:auto 1fr auto;justify-items:center;gap:4px;align-self:stretch;padding:14px 0}
+.szbar .szl{font:600 9px var(--f-body);text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.szbar b{font:700 13px var(--f-mono);font-variant-numeric:tabular-nums}
+.sztrack{position:relative;width:14px;border-radius:7px;overflow:hidden;background:linear-gradient(to top,#C8322A,#D9A32B 50%,#1E9A55);border:1px solid var(--line)}
+.sztrack i{position:absolute;left:0;right:0;top:0;background:var(--sunk);transition:height .4s}
+.szbar.none .sztrack{opacity:.35}
 .xyplot svg{width:100%;height:auto;display:block}
 .xyax{font:600 11px var(--f-body);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .xyax.xl,.xyax.xr{writing-mode:vertical-rl}.xyax.xl{transform:rotate(180deg)}
@@ -343,8 +349,12 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .xyplot .area{fill:var(--raise);fill-opacity:.2;stroke:var(--raise);stroke-width:2;stroke-dasharray:5 4}
 .xyplot .ctr{fill:var(--raise)}
 .xycap{margin:2px 0 0;font-size:13px;color:var(--muted);text-align:center}
-.xyplot.locked svg{filter:blur(2px);opacity:.55}
+.xyplot.locked .xyrow svg,.xyplot.locked .szbar{filter:blur(2px);opacity:.55}
 .xylock{position:absolute;inset:18% 10%;display:grid;place-content:center;gap:6px;text-align:center;background:color-mix(in srgb,var(--surface) 88%,transparent);border:1px solid var(--line);border-radius:14px;padding:14px}
+.xyload{justify-items:center;perspective:400px}
+.xyplot svg.chipspin{width:56px;height:56px;animation:chipspin 1.4s cubic-bezier(.45,.05,.55,.95) infinite;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))}
+@keyframes chipspin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
+@media (prefers-reduced-motion:reduce){.chipspin{animation-duration:4s}}
 .xylock b{font:700 16px var(--f-body)}.xylock span{font-size:13px;color:var(--muted)}
 .ptype2{font:700 22px/1.2 var(--f-display);margin:4px 0 0;text-align:center}
 </style>
@@ -1813,26 +1823,30 @@ function zoneOf(xy){ const w=xy.x<-.32?'tight':xy.x<=.3?'ok':xy.x<=.66?'loose':'
 function xyType(xy,mixed,acc){ const [w,st]=zoneOf(xy), W=mixed||xy.incons?'mixed':w; let nm=XY_NM[W][st]; if(nm==='TAG') nm=acc>=80?'Регуляр, близко к GTO':'TAG'; return {width:W,style:st,name:nm}; }
 // график стиля: точка, когда погрешность мала (2σ ≤ 0,1 по обеим осям), иначе область 95%; locked — заглушка для нового аккаунта
 const XY_MIN=50;
-function xyPlot(xy,locked,n){ const S=300, m=S/2, k=(S/2-18), X=v=>m+v*k, Y=v=>m-v*k;
+const CHIP_SVG='<svg class="chipspin" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#C9502F"/><g stroke="#fff" stroke-width="7" fill="none" stroke-dasharray="9.7 14.65" transform="rotate(-11 32 32)"><circle cx="32" cy="32" r="27.5"/></g><circle cx="32" cy="32" r="20" fill="#1C5A43" stroke="#fff" stroke-width="2"/><path d="M21 43V22h4.2L32 32.5 38.8 22H43v21h-4.6V30.2L32 40l-6.4-9.8V43z" fill="#fff"/></svg>';
+function xyPlot(xy,locked,n,sz,loading){ const S=300, m=S/2, k=(S/2-18), X=v=>m+v*k, Y=v=>m-v*k;
   const w=document.createElement('div'); w.className='xyplot'+(locked?' locked':'');
   const zl=[[-.32,'v'],[.3,'v'],[.66,'v'],[-.3,'h']].map(([v,o])=>o==='v'?`<line x1="${X(v)}" y1="${Y(1)}" x2="${X(v)}" y2="${Y(-1)}"/>`:`<line x1="${X(-1)}" y1="${Y(v)}" x2="${X(1)}" y2="${Y(v)}"/>`).join('')+`<line x1="${X(-.32)}" y1="${Y(.3)}" x2="${X(1)}" y2="${Y(.3)}"/>`;
   const zt=[[-.66,.33,'Нит'],[0,.66,'TAG'],[.48,.66,'LAG'],[.83,.66,'Маньяк'],[-.66,-.66,'Камень'],[0,-.66,'Пассивный'],[.48,-.66,'Фиш'],[.83,-.66,'Колл-<tspan x="'+X(.83)+'" dy="12">стейшн</tspan>'],[.48,0,'Лузовый'],[.83,0,'Очень<tspan x="'+X(.83)+'" dy="12">лузовый</tspan>']]
     .map(([x,y,t])=>`<text x="${X(x)}" y="${Y(y)}">${t}</text>`).join('');
   let mark='';
   if(xy&&!locked){ const rx=Math.max(.05,xy.hx), ry=Math.max(.05,xy.hy), pt=xy.hx<=.1&&xy.hy<=.1;
-    mark=pt?`<circle class="pt" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="9"/>`:`<ellipse class="area" cx="${X(xy.x)}" cy="${Y(xy.y)}" rx="${Math.min(1.2,rx)*k}" ry="${Math.min(1.2,ry)*k}"/><circle class="ctr" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="3.5"/>`;
+    const cloud=!pt&&xy.blobs&&xy.blobs.length>=2&&xy.spread>.1;
+    mark=pt?`<circle class="pt" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="9"/>`:cloud?`<image href="${cloudURL(xy.blobs,getComputedStyle(document.documentElement).getPropertyValue('--raise').trim())}" x="${X(-1)}" y="${Y(1)}" width="${2*k}" height="${2*k}" preserveAspectRatio="none" style="image-rendering:auto"/>`:`<ellipse class="area" cx="${X(xy.x)}" cy="${Y(xy.y)}" rx="${Math.min(1.2,rx)*k}" ry="${Math.min(1.2,ry)*k}"/><circle class="ctr" cx="${X(xy.x)}" cy="${Y(xy.y)}" r="3.5"/>`;
     w.dataset.mode=pt?'point':'area'; }
   w.innerHTML=`<div class="xytag">Префлоп профиль</div><div class="xyax xt">Агрессивный</div><div class="xyrow"><div class="xyax xl">Тайтовый</div>
     <svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Координаты стиля игры"><rect class="bg" x="${X(-1)}" y="${Y(1)}" width="${2*k}" height="${2*k}" rx="10"/>
     <g class="zl">${zl}</g><line class="axis" x1="${X(-1)}" y1="${m}" x2="${X(1)}" y2="${m}"/><line class="axis" x1="${m}" y1="${Y(1)}" x2="${m}" y2="${Y(-1)}"/>
     <g class="zt">${zt}</g><g class="gto"><circle cx="${m}" cy="${m}" r="4"/><text x="${m+7}" y="${m-7}">GTO</text></g>${mark}</svg>
-    <div class="xyax xr">Лузовый</div></div><div class="xyax xb">Пассивный</div>`;
-  if(locked){ const o=document.createElement('div'); o.className='xylock'; o.innerHTML='<b>Координаты пока не определены</b><span></span>';
+    <div class="xyax xr">Лузовый</div><div class="szbar${sz?'':' none'}" title="Точность сайзингов"><span class="szl">Сайзинг</span><div class="sztrack"><i style="height:${sz?100-sz.pct:100}%"></i></div><b>${sz?sz.pct+'%':'—'}</b></div></div><div class="xyax xb">Пассивный</div>`;
+  if(loading){ const o=document.createElement('div'); o.className='xylock xyload'; o.innerHTML=CHIP_SVG+'<span>Загружаю профиль…</span>'; w.appendChild(o); }
+  else if(locked){ const o=document.createElement('div'); o.className='xylock'; o.innerHTML='<b>Координаты пока не определены</b><span></span>';
     o.lastChild.textContent=`Сыграй 50+ раздач в режимах «GTO тест» или «Префлоп». Сейчас: ${n||0} из ${XY_MIN}.`; w.appendChild(o); }
   else if(xy){ const c=document.createElement('p'); c.className='xycap';
     const sg=v=>(v>0?'+':v<0?'−':'')+Math.abs(v);
-    c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям.':(xy.incons?'Область большая: много ошибок в разные стороны (то шире, то уже GTO, то лишний рейз, то лишний колл). В среднем они гасят друг друга, поэтому центр может быть рядом с GTO, но игра нестабильная.':'Область — где вероятнее всего твой стиль; с каждой игрой она уточняется и может смещаться.'));
-    w.appendChild(c); }
+    c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям.':(w.dataset.mode==='area'&&xy.blobs&&xy.spread>.1&&xy.blobs.length>=2?'Облако — твоя игра в разных ситуациях. Если оно распалось на части, в разных спотах ты играешь по-разному. ':'')+(xy.incons?'Ошибки в разные стороны гасят друг друга в среднем, поэтому игра нестабильная, даже если рядом с GTO.':'Область — где вероятнее всего твой стиль; с каждой игрой она уточняется и может смещаться.'));
+    w.appendChild(c);
+    if(sz){ const c2=document.createElement('p'); c2.className='xycap'; c2.textContent=`Сайзинг: ${sz.pct}% рейзов нужного размера (из ${sz.n}).`; w.appendChild(c2); } }
   return w; }
 function classifyType(D,V,Vg,P,Pg,acc){
   const rate=(x,o,pr=.15,k=1.5)=>(x+pr*k)/(o+k); // доля с мягким априорным ожиданием, чтобы 1 из 1 не давало 100%
@@ -1850,23 +1864,48 @@ function classifyType(D,V,Vg,P,Pg,acc){
   return {lo,ti,pa,ag,width,style,name:NM[width][style]}; }
 // тип по последним ≤300 решениям из истории (тесты «Профиля» и «Префлоп»), свежие весят больше: вес e^(−давность/150)
 function histType(rows){ rows=(rows||[]).filter(r=>r&&HPOS[r.h]!=null&&Array.isArray(r.ok)&&r.ok.length); const n=rows.length; if(n<20) return null;
-  const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0}, SG={}; let good=0,tw=0;
+  const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0}, SG={}, DS={}; let good=0,tw=0,szOk=0,szN=0;
   rows.forEach((r,i)=>{ const w=Math.exp(-(n-1-i)/150), al=r.ok; tw+=w; if(al.includes(r.a)) good+=w;
-    if(isOutlier(r.h,r.a,r.amt,al)) return;
-    const sg=sitRow(r), q=sg?SITQ[sg].q:null, sev=q==null?1:.4+.6*Math.min(1,Math.abs(HPOS[r.h]-q)/.15);
+    if(isOutlier(r.h,r.a,r.amt,al)) return; // грубый промах (сброс AA, пуш мусором) — случайность, в оценку не идёт
+    if(r.a==='R'&&al.includes('R')&&r.g!=null){ szN+=w; if(r.g===2) szOk+=w; } // сайзинг: рейз был верным решением, оцениваем размер
+    // средние ошибки весят больше пограничных: вес растёт с расстоянием руки от границы GTO
+    const sg=sitRow(r), q=sg?SITQ[sg].q:null, sev=q==null?1:.3+.9*Math.min(1,Math.abs(HPOS[r.h]-q)/.15);
     const gPlay=al.some(a=>a==='C'||a==='R'), gFold=al.some(a=>a==='F'||(a==='X'&&r.toCall<=0)), gRaise=al.includes('R'), gNoRaise=al.some(a=>a!=='R'), pPlay=r.a==='C'||r.a==='R';
     if(gFold&&!gPlay){ D.lo+=w*sev; if(pPlay) D.l+=w*sev; }
     if(gPlay&&!gFold){ D.to+=w*sev; if(!pPlay) D.t+=w*sev; }
     if(pPlay&&gPlay&&gRaise&&!gNoRaise){ D.po+=w; if(r.a==='C') D.p+=w; }
     if(pPlay&&gNoRaise&&!gRaise){ D.ao+=w; if(r.a==='R') D.a+=w; }
-    if(sg) (SG[sg]=SG[sg]||[]).push({pos:HPOS[r.h],y:pPlay,yr:r.a==='R',w}); });
+    if(sg){ (SG[sg]=SG[sg]||[]).push({pos:HPOS[r.h],y:pPlay,yr:r.a==='R',w});
+      const d=DS[sg]=DS[sg]||{a:0,ao:0,p:0,po:0,l:0,lo:0,t:0,to:0,n:0}; d.n+=w;
+      if(gFold&&!gPlay){ d.lo+=w*sev; if(pPlay) d.l+=w*sev; } if(gPlay&&!gFold){ d.to+=w*sev; if(!pPlay) d.t+=w*sev; }
+      if(pPlay&&gPlay&&gRaise&&!gNoRaise){ d.po+=w; if(r.a==='C') d.p+=w; } if(pPlay&&gNoRaise&&!gRaise){ d.ao+=w; if(r.a==='R') d.a+=w; } } });
   let V=0,Vg=0,P=0,Pg=0,FW=0; const fits=[];
   for(const sg of Object.keys(SIT)){ const pts=SG[sg]||[], fw=pts.reduce((x,p)=>x+p.w,0), f=fitW(pts,SITQ[sg].q,.15,'y'), fr=fitW(pts,SITQ[sg].qr,.15,'yr');
-    fits.push({sg,t:f.t,sd:f.sd,tr:Math.min(f.t,fr.t),sdr:fr.sd,q:SITQ[sg].q,qr:SITQ[sg].qr});
+    fits.push({sg,t:f.t,sd:f.sd,tr:Math.min(f.t,fr.t),sdr:fr.sd,q:SITQ[sg].q,qr:SITQ[sg].qr,n:pts.length});
     V+=fw*f.t; Vg+=fw*SITQ[sg].q; P+=fw*Math.min(f.t,fr.t); Pg+=fw*SITQ[sg].qr; FW+=fw; }
   if(FW){ V/=FW; Vg/=FW; P/=FW; Pg/=FW; }
   const acc=tw?good/tw*100:0, C0=classifyType(D,V,Vg,P,Pg,acc), xy=styleXY(fits,D,acc);
-  return {type:xy?xyType(xy,C0.width==='mixed',acc).name:C0.name,n,xy}; }
+  if(xy) addBlobs(xy,fits,DS);
+  return {type:xy?xyType(xy,C0.width==='mixed',acc).name:C0.name,n,xy,sz:szN>=4?{pct:Math.round(szOk/szN*100),n:Math.round(szN)}:null}; }
+// облако: каждая ситуация с данными — своя точка (ширина в ней и агрессия в ней) с погрешностью. Если игрок в одних ситуациях
+// шире GTO, а в других уже, облако распадается на части (бублик, дуга), и пустой центр не выдаётся за «идеальную» игру.
+function addBlobs(xy,fits,DS){ const B=[];
+  for(const f of fits){ const d=DS[f.sg]; if(!d||f.n<3) continue;
+    // ширина в ситуации — по доле ошибок в обе стороны (лишние сыгранные руки минус лишние сбросы); масштаб подогнан под общую ось X
+    const ag=(d.a+.05)/(d.ao+1), pa=(d.p+.05)/(d.po+1), lo=(d.l+.05)/(d.lo+1), ti=(d.t+.05)/(d.to+1), dx=lo-ti;
+    B.push({x:clamp1(dx>0?1.1*dx:2*dx),y:clamp1(ag-pa),sx:Math.max(.09,Math.sqrt(lo*(1-lo)/(d.lo+1)+4*ti*(1-ti)/(d.to+1))),sy:Math.max(.09,Math.sqrt(ag*(1-ag)/(d.ao+1)+pa*(1-pa)/(d.po+1))),w:d.n}); }
+  const W=B.reduce((a,b)=>a+b.w,0); if(!W) return;
+  const mx=B.reduce((a,b)=>a+b.w*b.x,0)/W, my=B.reduce((a,b)=>a+b.w*b.y,0)/W, spr=Math.sqrt(B.reduce((a,b)=>a+b.w*((b.x-mx)**2+(b.y-my)**2),0)/W);
+  xy.blobs=B; xy.spread=spr; if(spr>=.4) xy.incons=true; if(spr>.1){ xy.hx=Math.max(xy.hx,.11); xy.hy=Math.max(xy.hy,.11); } }
+// рисует облако плотностью на канвасе: заливка там, где плотность ≥ 22% от максимума, край чуть темнее
+function cloudURL(B,col){ const G=200, cv=document.createElement('canvas'); cv.width=cv.height=G; const c=cv.getContext('2d'), im=c.createImageData(G,G), D=new Float32Array(G*G); let mx=0;
+  for(let j=0;j<G;j++) for(let i=0;i<G;i++){ const u=-1+2*(i+.5)/G, v=1-2*(j+.5)/G; let d=0;
+    for(const b of B) d+=b.w*Math.exp(-((u-b.x)**2/(2*b.sx*b.sx)+(v-b.y)**2/(2*b.sy*b.sy)));
+    D[j*G+i]=d; if(d>mx) mx=d; }
+  const m=col.match(/#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i)||[0,'c9','50','2f'], R=parseInt(m[1],16), Gc=parseInt(m[2],16), Bc=parseInt(m[3],16);
+  const ss=(a,b,x)=>{ const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); };
+  for(let p=0;p<G*G;p++){ const r=D[p]/mx; if(r<.2) continue; const e=.6*ss(.2,.24,r)*(1-ss(.24,.32,r))+ss(.2,.26,r)*(.16+.26*Math.min(1,(r-.26)/.6)); im.data[p*4]=R; im.data[p*4+1]=Gc; im.data[p*4+2]=Bc; im.data[p*4+3]=Math.round(e*255); }
+  c.putImageData(im,0,0); return cv.toDataURL(); }
 function profAnalyze(run){
   const G={}; let nDec=0,good=0; const errs={}, outs=[]; const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0};
   const F={fo:0,fp:[],po:0,pf:[],ro:0,rc:[],ao:0,ar:[],lo:0,lim:0,vo:0,v3:0,vc:0,vf:0,g3:0,gc:0,gf:0,to:0,tf:0,tc:0,t4:0,bp:0,bpf:0,bf:0,bfp:0,tp:0,tpf:0};
@@ -1941,9 +1980,9 @@ function renderResults(){ syncRun();
   const hd=document.createElement('div'); hd.innerHTML='<p class="psub"></p><h2 class="ptype"></h2><p class="psub"></p>';
   hd.children[0].textContent=`Префлоп профиль игрока «${run.name}»`; hd.children[1].textContent=A.type; hd.children[2].textContent=`VPIP ${pc(A.V)} (по GTO ${pc(A.Vc)}), PFR ${pc(A.P)} (по GTO ${pc(A.Pc)}). Уверенность оценки: ${A.conf}.`;
   v.appendChild(hd);
-  { const cur=[]; for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue; cur.push({pos:x.pos,h:x.h,k:x.d.kind,a:x.a,amt:x.amt||0,ok:x.al,toCall:x.d.toCall,N}); }
+  { const cur=[]; for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue; cur.push({pos:x.pos,h:x.h,k:x.d.kind,a:x.a,amt:x.amt||0,ok:x.al,toCall:x.d.toCall,N,g:x.g}); }
     const rows=(HIST.rows||[]).concat(cur).slice(-300), HT=histType(rows);
-    if(HT){ hd.children[1].textContent=HT.type; v.appendChild(xyPlot(HT.xy,rows.length<XY_MIN,rows.length));
+    if(HT){ hd.children[1].textContent=HT.type; v.appendChild(xyPlot(HT.xy,rows.length<XY_MIN,rows.length,HT.sz));
       const c=document.createElement('p'); c.className='hint'; c.style.cssText='margin:0;text-align:center'; c.textContent=`Тип и координаты — по последним ${rows.length} решениям (этот тест и прошлые игры на аккаунте), свежие весят больше.`; v.appendChild(c); } }
   if(A.irt){ const g=document.createElement('div'); g.className='gtobar'; const sc=Math.round(A.irt.score);
     g.innerHTML=`<div class="gtohead"><span>Соответствие GTO</span><b>${sc}%</b></div><div class="gtotrack"><i style="width:${sc}%"></i></div><p class="hint"></p>`;
@@ -2254,7 +2293,7 @@ function openProfile(){
       +`<div><b>${T.hands}</b><span>раздач</span></div><div><b>${T.sessions}</b><span>тестов</span></div>`;
     const locked=hst!=='load'&&(!HT||HN<XY_MIN);
     card.querySelector('#ptype').textContent=hst==='load'?'…':locked?'Тип пока не определён':HT.type;
-    card.querySelector('#pxy').replaceChildren(hst==='load'?'':xyPlot(HT&&HT.xy,locked,HN));
+    card.querySelector('#pxy').replaceChildren(hst==='load'?xyPlot(null,true,0,null,true):xyPlot(HT&&HT.xy,locked,HN,HT&&HT.sz));
     note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.sessions?'Учитываются только завершённые GTO тесты.':'Пока нет завершённых тестов. Пройди GTO тест до конца, и здесь появится статистика.'; };
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();

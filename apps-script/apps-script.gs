@@ -316,7 +316,9 @@ function history_(x) {
   let mine = mineRows();
   if (!mine.length) { updRecent_(a, '', '', []); mine = mineRows(); }
   const dec = [];
-  mine.forEach(r => { try { dec.push(JSON.parse(r[13])); } catch (e) {} });
+  // оценку решения берём из столбца «Оценка» (в JSON её нет): 2 — верно, 1 — неточный размер, 0 — ошибка
+  const G = { 'верно': 2, 'неточный размер': 1, 'ошибка': 0 };
+  mine.forEach(r => { try { const d = JSON.parse(r[13]); const g = G[String(r[12])]; if (g != null) d.g = g; dec.push(d); } catch (e) {} });
   return { ok: true, dec };
 }
 // Запусти один раз вручную (rebuildRecent → Выполнить): пересобирает «Последние 300» для всех аккаунтов из всей истории.
