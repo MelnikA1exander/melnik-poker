@@ -26,7 +26,7 @@ repo/                       ← рабочая копия репозитория
   README.md
   apps-script/apps-script.gs        ← бэкенд (Google Apps Script)
   apps-script/apps-script-setup.md  ← пошаговая инструкция развёртывания скрипта
-repo.bundle                 ← git bundle со всей историей (50 коммитов): `git clone repo.bundle melnik-poker`
+repo.bundle                 ← git bundle со всей историей (вся история `main`, 54 коммита, плюс ветка с этим HANDOFF): `git clone repo.bundle melnik-poker`
 project-files/              ← общая папка проекта (вне git)
   hosting/                  ← копия того, что лежит в репо (index.html, apps-script.gs, иконки) — совпадает с repo/
   trainer/
@@ -49,7 +49,7 @@ docs/
   strategy.md               ← экспорт главного документа «Poker Coach — стратегия домашней игры» (профили соперников, правила, источники)
 ```
 
-Если архив распакован, а git нужен с историей: `git clone repo.bundle melnik-poker && cd melnik-poker && git remote set-url origin https://github.com/melnika1exander/melnik-poker.git`.
+Если архив распакован, а git нужен с историей: `git clone -b main repo.bundle melnik-poker && cd melnik-poker && git remote set-url origin https://github.com/melnika1exander/melnik-poker.git`.
 
 ---
 
