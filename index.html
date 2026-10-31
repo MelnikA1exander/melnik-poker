@@ -209,6 +209,7 @@ html:has(.sheet),html:has(.sheet) body{overflow:hidden}
 .pstats b{display:block;font:700 18px var(--f-mono);font-variant-numeric:tabular-nums}
 .pstats span{font-size:12px;color:var(--muted)}
 .tips{margin:0;padding-left:18px;display:grid;gap:6px}
+.dec .why{margin:6px 0 0;padding:8px 10px;border-left:3px solid var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--surface));border-radius:8px;font-size:13px;line-height:1.45}
 .advice{margin:0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--chip) 45%,transparent);border-left:4px solid var(--chip);border-radius:10px;background:color-mix(in srgb,var(--chip) 11%,var(--surface));font-style:italic;color:var(--ink);line-height:1.45}
 .advice .tips{font-style:italic}
 .hlist{display:grid;border-top:1px solid var(--line)}
@@ -808,7 +809,7 @@ function heroAct(a,amt){
       else { g=1; note=`Действие верное, но размер ${amt} ${amt>b.ok[1]?'слишком крупный':'слишком мелкий'}. База — ${b.txt}.`; } } }
   else if(a==='F'&&d.toCall<=0){ note='Сбрасывать, когда можно бесплатно прочекать, нельзя никогда.'; }
   const ctx=contextText(h);
-  h.decisions.push({d,c,a,amt:a==='R'?Math.min(STACK,amt):0,g,note,ctx,h:pl.h,pos:lab(h.hero),al:[...al],prof:REC});
+  h.decisions.push({d,c,a,amt:a==='R'?Math.min(STACK,amt):0,g,note,ctx,h:pl.h,cards:[...pl.cards],pos:lab(h.hero),al:[...al],prof:REC});
   if(!REC){ session.n++; session.pts+=g; session.streak=g===2?session.streak+1:0;
   S.hist.push({m:MODE,k:d.kind,pos:lab(h.hero),h:pl.h,a,amt:amt||0,c,g,N,ts:Date.now()}); if(S.hist.length>1500) S.hist=S.hist.slice(-1500); save(); }
   recDecision(h,d,a,amt); pfDecision(h,d,a,amt);
@@ -1046,6 +1047,45 @@ function explainBase(x){
   if(d.kind==='cold4b') return `${pre} Перед тобой 3-бет и 4-бет: продолжаем только самыми сильными руками, ≈ ${r+cc}% рук.`;
   return `${pre} Против олл-ина на 125 ББ коллируем, когда эквити против диапазона пуша выше ~39% (столько требуют шансы банка): ≈ ${cc}% рук.`;
 }
+// ---- «почему»: объяснение ошибки через эквити, кражу блайндов и доминацию ----
+function chW(ch,mode){ const w={}; for(const hh of ALL169){ const c=cls(ch,hh); if(c==='F') continue; const fv=ch.f&&ch.f[hh];
+    let r,k; if(fv!=null){ [r,k]=Array.isArray(fv)?fv:[fv,0]; if(c==='CF'&&!Array.isArray(fv)){ k=fv; r=0; } } else { r=c.includes('R')?(c.length>1?.5:1):0; k=c.includes('C')?(c.length>1?.5:1):0; if(c==='CF') k=.5; }
+    const v=mode==='R'?r:mode==='C'?k:Math.min(1,r+k); if(v>0) w[hh]=v; } return w; }
+function defCh(o,q){ const g=grp(o), t=isBB(q)?'BB':isSB(q)?'SB':'IP';
+  return VSO[`${rfiKey(o)}>${t==='IP'?rfiKey(q):t}`]||VSOPEN[g==='SB'?'SB-BB':`${g}-${t}`]||VSOPEN[`${g}-BB`]||VSOPEN['MP-IP']; }
+function wShare(w){ let s=0; for(const hh in w) s+=combos(hh)*w[hh]; return s/1326; }
+function domShare(hh,w){ if(hh.length===2){ let s=0,t=0; for(const v in w){ const n=combos(v)*w[v]; t+=n; if(v.length===2&&ri(v[0])<ri(hh[0])) s+=n; } return t?s/t:0; }
+  const a=ri(hh[0]), b=ri(hh[1]); let s=0,t=0;
+  for(const v in w){ const n=combos(v)*w[v]; t+=n; if(v.length===2){ if(ri(v[0])<a) s+=n; continue; } const x=ri(v[0]), y=ri(v[1]);
+    if((x===a&&y<b)||(x===b&&y<a&&y!==a)||(y===a&&x<b)||(x<a&&y===a)) s+=n; } return t?s/t:0; }
+function handFeel(hh){ if(hh.length===2) return ri(hh[0])>=ri('7')?'мелкая пара: играет в основном на сет (≈12% к флопу)':''; const s=hh[2]==='s', gap=ri(hh[1])-ri(hh[0])-1;
+  if(s) return gap>=3?'одномастная, но без связки: стрит почти не собирает':'';
+  return gap>=2?'разномастная и несвязанная: флеш не собирает, стрит редко':'разномастная: флеш не собирает'; }
+function eqQuick(cards,w){ const keep=Math.random; Math.random=NATIVE_RANDOM; try{ const r=equityVsRanges(cards,[w],3000); return r?r.hero:null; } finally{ Math.random=keep; } }
+const pc0=x=>Math.round(x*100)+'%';
+function whyText(x){ try{
+  if(x.post||x.g!==0||MODE==='ind'||!x.cards) return '';
+  const d=x.d, hh=x.h, ph=prettyHand(hh), a=x.a, al=new Set(x.al), fe=handFeel(hh);
+  if(d.kind==='open'&&!d.callers){
+    const p=d.p, beh=[]; for(let q=p+1;q<N;q++) beh.push(q);
+    let pf=1,p3=1; for(const q of beh){ const ch=defCh(p,q); pf*=1-wShare(chW(ch)); p3*=1-wShare(chW(ch,'R')); } p3=1-p3; const open=isSB(p)?12:10, win=SBA+BB-(isSB(p)?SBA:0), need=open/(open+win);
+    const wb=chW(defCh(p,N-1)), eq=eqQuick(x.cards,wb), dom=domShare(hh,wb);
+    const steal=`все позади сбросят примерно в ${pc0(pf)} случаев${isSB(p)?'':` (за тобой ${beh.length} ${plw(beh.length,'игрок','игрока','игроков')})`}. Чистый рейз-блеф до ${open} ради ${win} в банке окупается, только если сбрасывают в ${pc0(need)} случаев`;
+    if(a==='R'&&!al.has('R')) return `Почему фолд: ${steal}, поэтому часть денег рука должна добирать после флопа. Когда тебя коллируют, чаще всего это BB: против его диапазона защиты у ${ph} ≈${pc0(eq)} эквити${dom>=.12?`, и в ${pc0(dom)} случаев у него рука, которая тебя доминирует (общая карта со старшим кикером или пара старше)`:''}.${fe?` К тому же ${ph} — ${fe}.`:''}${isSB(p)?' Без позиции против BB такого эквити не хватает: после флопа рука чаще платит, чем выигрывает.':` Даже ${inPos(p,N-1)?'в позиции ':''}${pc0(eq)} — меньше половины банка, BB доплачивает со скидкой (1 ББ уже вложен), а примерно в ${pc0(p3)} раздач кто-то сзади 3-бетит, и рейз приходится сбросить.`} Поэтому по GTO опен с ${ph} отсюда в минус, а фолд стоит 0.`;
+    if(a==='F'&&al.has('R')) return `Почему рейз: ${steal}, и даже когда тебя коллируют, против диапазона защиты BB у ${ph} ≈${pc0(eq)} эквити. Кража блайндов плюс игра после флопа делают рейз прибыльнее фолда.`;
+    return ''; }
+  if(d.kind==='vsopen'&&d.op!=null){
+    const o=d.op, wo=chW(RFI[rfiKey(o)]), eq=eqQuick(x.cards,wo), dom=domShare(hh,wo);
+    const heroBet=d.curBet-d.toCall, dead=(isSB(o)?0:SBA)+(isBB(o)?0:BB)-(isSB(d.p)||isBB(d.p)?heroBet:0), pot=d.curBet*(1+(d.callers||0))+heroBet+Math.max(0,dead), need=d.toCall/(pot+d.toCall);
+    const oop=isSB(d.p)||isBB(d.p)&&!isSB(o), behind=!isBB(d.p);
+    const odds=`Колл ${d.toCall} в банк ${pot}: нужно ≈${pc0(need)} эквити`;
+    if(a==='C'&&!al.has('C')&&!al.has('R')) return `Почему фолд: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити${dom>=.12?`, в ${pc0(dom)} случаев у опенера рука, которая тебя доминирует`:''}. ${odds}, но это эквити ${oop?'без позиции реализуется хуже: часть банков придётся отдать на ставках после флопа':'реализуется не полностью'}${behind?', а игроки сзади ещё могут сквизнуть':''}.${fe?` ${cap(ph)} — ${fe}.`:''}`;
+    if(a==='F'&&(al.has('C')||al.has('R'))) return `Почему играть: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити. ${odds}${eq>need?' — запас есть':''}${isBB(d.p)?', и ты закрываешь действие: сзади никто не повысит':''}. Сброс отдаёт банк, который эта рука выигрывает в долгую.`;
+    if(a==='R'&&!al.has('R')) return `Почему не 3-бет: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити. На 3-бет опенер продолжит в основном сильной частью диапазона, против которой рука в плохой форме${dom>=.12?` (в ${pc0(dom)} случаев у него доминирующая рука)`:''}, а сбросит то, что ты и так обыгрываешь. ${al.has('C')?'Колл держит в банке его слабые руки.':'Для блеф-3-бета у руки нет блокеров (туза или короля) и эквити, поэтому здесь фолд.'}`;
+    if(a==='C'&&al.has('R')&&al.has('F')&&!al.has('C')) return `Почему не колл: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити, но ${oop?'без позиции':'в этой точке'}${behind?' и с BB за спиной':''} колл реализует его плохо: банк часто уходит на ставках после флопа${behind?', а BB может сквизнуть':''}. Поэтому GTO играет такую руку либо 3-бетом (часто забирает банк сразу), либо сбрасывает.`;
+    if(a==='C'&&al.has('R')&&!al.has('C')) return `Почему 3-бет: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити${eq>=.5?' — рука сильнее большей части его диапазона':''}. Рейз забирает больше денег у худших рук${oop?' и не даёт играть без позиции в банке на двоих-троих':''}.`;
+    return ''; }
+  return ''; } catch(e){ return ''; } }
 function gridEl(x){
   const d=x.d, gw=document.createElement('div'); gw.className='gridwrap'; const grid=document.createElement('div'); grid.className='grid';
   for(let i=0;i<13;i++) for(let j=0;j<13;j++){
@@ -1073,6 +1113,7 @@ function decBlock(x,i){
   b.querySelector('.you').textContent='Твой ответ: '+(x.a==='R'?`${RAISE_NAME[x.d.kind]} до ${x.amt}`:actWord(x.a,x.d));
   b.querySelector('.gto').textContent=(x.prof?'Правильно: ':'GTO: ')+gtoText(x);
   b.querySelector('.ex').textContent=explain(x);
+  { const w=whyText(x); if(w){ const p=document.createElement('p'); p.className='why'; p.textContent=w; b.querySelector('.ex').after(p); } }
   const sz=b.querySelector('.sz'); if(x.note) sz.textContent=x.note; else sz.remove();
   b.appendChild(gridEl(x)); return b;
 }
@@ -2117,7 +2158,9 @@ function resSummary(A,run){ const F=A.F, TP=profTips(A,run), out=[], r=x=>Math.r
   if(szl.length) out.push(`По сайзингу: ${szl.join('; ')}.`);
   return out.join(' '); }
 // короткий вывод по сайзингу для итога
-function TPS(run){ const l=gtoSizing(run).filter(t=>/Крупнее GTO|Мельче GTO|олл-ин:/.test(t)); return l.length?'Сайзинг: '+l.map(t=>t.split('.')[0].replace(/: обычно.*$/,'')).map(lc1).join(', ')+' — размер не по GTO, подробности в разделе сайзинга.':''; }
+function TPS(run){ const l=gtoSizing(run).filter(t=>/(Крупнее|Мельче) GTO в \d+ из \d+|олл-ин:/.test(t)); if(!l.length) return '';
+  const fix=l.map(t=>{ const m=t.match(/^([^:]+): обычно ([^(]+?)\s*(?:\([^)]*\))?, в GTO ([^(.:]+?)\s*(?:\(|\.|:)/); if(/олл-ин:/.test(t)) return '4-бет олл-ин замени на 4-бет ×2,2–3 от 3-бета'; return m?`${lc1(m[1])} ${m[2]} → ${m[3].replace(/^около /,'')}`:null; }).filter(Boolean);
+  return `Сайзинг: ${fix.join('; ')}. Как строить размер: опен 2,5 ББ плюс 1 ББ за каждого лимпера, из SB 3 ББ; 3-бет ×3 от опена в позиции и ×4–4,5 без позиции, плюс один опен за каждого коллера; 4-бет ×2,2–2,5 от 3-бета в позиции и ×2,5–3 без позиции. Один размер на весь диапазон в каждом споте, чтобы ставка не выдавала силу руки.`; }
 function tipLevel(A){ const z=A.xy?zoneOf(A.xy):['ok','bal'], acc=A.nDec?A.goodA/A.nDec*100:A.acc; if(acc>=82&&z[0]==='ok'&&!(A.xy&&A.xy.incons)) return 'good'; if(acc>=68&&z[0]!=='wild') return 'mid'; return 'weak'; }
 function profTips(A,run){ const lvl=tipLevel(A), z=A.xy?zoneOf(A.xy):['ok','bal'], F=A.F, soft=lvl==='good', T=[];
   const intro=lvl==='good'?'Игра близка к GTO. Ниже мелкая настройка: отклонения небольшие, правь их без резких движений.'
@@ -2192,14 +2235,14 @@ function renderResults(){ syncRun();
     g.innerHTML=`<div class="gtohead"><span>Соответствие GTO</span><b>${sc}%</b></div><div class="gtotrack"><i style="width:${sc}%"></i></div><p class="hint"></p>`;
     g.querySelector('.hint').textContent=`Учитывает сложность решений. Лёгкие решения (рука далеко от границы диапазона): ошибок ${A.irt.easyMiss} из ${A.irt.easyN}. Сложные (у самой границы): верно ${A.irt.hardHit} из ${A.irt.hardN}.`;
     v.appendChild(g); }
+  const st=document.createElement('div'); st.className='pstats';
+  const dv=k=>{ const [x,o]=A.dev[k]; return o<.5?'—':pc(x/o*100); };
+  const tiles=[[`${A.good}/${A.nDec}`,'верных решений'],[dv('loose'),'играет руки, которые GTO сбрасывает'],[dv('tight'),'сбрасывает руки, которые GTO играет'],[dv('passive'),'коллирует, где GTO рейзит'],[dv('aggr'),'рейзит, где GTO не рейзит'],[pc(A.V),`VPIP, по GTO ${pc(A.Vc)}`],[pc(A.P),`PFR, по GTO ${pc(A.Pc)}`]];
+  for(const [b,t] of tiles){ const d=document.createElement('div'); d.innerHTML='<b></b><span></span>'; d.firstChild.textContent=b; d.lastChild.textContent=t; st.appendChild(d); }
+  v.appendChild(st);
   if(A.facts.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Как играл</b>'; const ul=document.createElement('ul'); ul.className='tips';
     for(const f of A.facts.concat(A.traits.length?['По границам диапазонов: '+A.traits.join(', ')+'.']:[])){ const li=document.createElement('li'); li.textContent=f; ul.appendChild(li); }
     v.append(h3,ul,advEl(advHow(A))); }
-  const st=document.createElement('div'); st.className='pstats';
-  const dv=k=>{ const [x,o]=A.dev[k]; return o<.5?'—':pc(x/o*100); };
-  const tiles=[[dv('loose'),'играет руки, которые GTO сбрасывает'],[dv('tight'),'сбрасывает руки, которые GTO играет'],[dv('passive'),'коллирует, где GTO рейзит'],[dv('aggr'),'рейзит, где GTO не рейзит'],[pc(A.V),`VPIP, по GTO ${pc(A.Vc)}`],[pc(A.P),`PFR, по GTO ${pc(A.Pc)}`],[`${A.good}/${A.nDec}`,'верных решений']];
-  for(const [b,t] of tiles){ const d=document.createElement('div'); d.innerHTML='<b></b><span></span>'; d.firstChild.textContent=b; d.lastChild.textContent=t; st.appendChild(d); }
-  v.appendChild(st);
   if(A.rows.length){ const tb=document.createElement('table'); tb.className='st';
     tb.innerHTML='<thead><tr><th>Ситуация</th><th>Рук</th><th>Играет</th><th>GTO</th></tr></thead><tbody></tbody>';
     for(const x of A.rows){ const tr=document.createElement('tr'); const tc=Math.min(.99,x.t/XY_RX0), ratio=tc/Math.max(.01,x.q), tag=x.n+Math.min(x.nh,3)<3?' (мало данных)':ratio>1.3?' шире':ratio<.72?' уже':'';
