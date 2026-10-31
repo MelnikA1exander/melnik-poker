@@ -1606,6 +1606,7 @@ function postBlock(h,x,i){
 function setGame(g){ showRanges(false);
   if(g==='prof'&&!REC){ SAVEDF=filter; filter='all'; } else if(g!=='prof'&&REC){ filter=SAVEDF; }
   GAME=g; REC=g==='prof'; MODE=REC?'gto':STYLE; $('#m-prof').setAttribute('aria-pressed',g==='prof'); $('#m-pre').setAttribute('aria-pressed',g==='pre'); $('#m-hand').setAttribute('aria-pressed',g==='hand');
+  if(g==='pre'){ if(STYLE==='ind') setMode('gto'); const b=$('#s-ind'); b.classList.add('locked'); b.setAttribute('aria-disabled','true'); b.title='Скоро'; b.innerHTML='Индивидуальный <span class="soon">скоро</span>'; }
   $('#style').classList.toggle('hide',REC); $('#filters').classList.toggle('hide',REC); $('#stats').hidden=g!=='pre'; updScore();
 
 }
@@ -2433,6 +2434,7 @@ $('#s-gto').onclick=()=>{ setMode('gto'); idle(); };
 // индивидуальный режим временно закрыт; открывается тройным нажатием
 let indTaps=[];
 $('#s-ind').onclick=()=>{ const b=$('#s-ind');
+  if(GAME==='pre') return; // в режиме «Префлоп» индивидуальный закрыт полностью, пока не готовы свои чарты
   if(b.classList.contains('locked')){ const t=Date.now(); indTaps=indTaps.filter(x=>t-x<1500); indTaps.push(t);
     if(indTaps.length<3) return; b.classList.remove('locked'); b.removeAttribute('aria-disabled'); b.title=''; b.textContent='Индивидуальный'; }
   setMode('ind'); idle(); };
