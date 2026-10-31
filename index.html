@@ -277,6 +277,7 @@ html:has(.sheet),html:has(.sheet) body{overflow:hidden}
 .legend span{display:flex;align-items:center;gap:5px}
 .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
 details.stats{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+details.stats[hidden]{display:none}
 details.stats summary{cursor:pointer;font:600 14px var(--f-body)}
 table.st{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums;margin-top:8px}
 table.st th{font:500 11px var(--f-body);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
@@ -1071,25 +1072,23 @@ function eqQuick(cards,w){ const keep=Math.random; Math.random=NATIVE_RANDOM; tr
 const pc0=x=>Math.round(x*100)+'%';
 function whyText(x){ try{
   if(x.post||x.g!==0||MODE==='ind'||!x.cards) return '';
-  const d=x.d, hh=x.h, ph=prettyHand(hh), a=x.a, al=new Set(x.al), fe=handFeel(hh);
+  const d=x.d, hh=x.h, ph=prettyHand(hh), a=x.a, al=new Set(x.al);
   if(d.kind==='open'&&!d.callers){
     const p=d.p, beh=[]; for(let q=p+1;q<N;q++) beh.push(q);
-    let pf=1,p3=1; for(const q of beh){ const ch=defCh(p,q); pf*=1-wShare(chW(ch)); p3*=1-wShare(chW(ch,'R')); } p3=1-p3; const open=isSB(p)?12:10, win=SBA+BB-(isSB(p)?SBA:0), need=open/(open+win);
-    const wb=chW(defCh(p,N-1)), eq=eqQuick(x.cards,wb), dom=domShare(hh,wb);
-    const steal=`все позади сбросят примерно в ${pc0(pf)} случаев${isSB(p)?'':` (за тобой ${beh.length} ${plw(beh.length,'игрок','игрока','игроков')})`}. Чистый рейз-блеф до ${open} ради ${win} в банке окупается, только если сбрасывают в ${pc0(need)} случаев`;
-    if(a==='R'&&!al.has('R')) return `Почему фолд: ${steal}, поэтому часть денег рука должна добирать после флопа. Когда тебя коллируют, чаще всего это BB: против его диапазона защиты у ${ph} ≈${pc0(eq)} эквити${dom>=.12?`, и в ${pc0(dom)} случаев у него рука, которая тебя доминирует (общая карта со старшим кикером или пара старше)`:''}.${fe?` К тому же ${ph} — ${fe}.`:''}${isSB(p)?' Без позиции против BB такого эквити не хватает: после флопа рука чаще платит, чем выигрывает.':` Даже ${inPos(p,N-1)?'в позиции ':''}${pc0(eq)} — меньше половины банка, BB доплачивает со скидкой (1 ББ уже вложен), а примерно в ${pc0(p3)} раздач кто-то сзади 3-бетит, и рейз приходится сбросить.`} Поэтому по GTO опен с ${ph} отсюда в минус, а фолд стоит 0.`;
-    if(a==='F'&&al.has('R')) return `Почему рейз: ${steal}, и даже когда тебя коллируют, против диапазона защиты BB у ${ph} ≈${pc0(eq)} эквити. Кража блайндов плюс игра после флопа делают рейз прибыльнее фолда.`;
+    let pf=1; for(const q of beh){ pf*=1-wShare(chW(defCh(p,q))); } const open=isSB(p)?12:10, win=SBA+BB-(isSB(p)?SBA:0), need=open/(open+win);
+    const wb=chW(defCh(p,N-1)), eq=eqQuick(x.cards,wb), dom=domShare(hh,wb), who=isSB(p)?'BB':'все позади', fw=isSB(p)?'сбросит':'сбросят';
+    if(a==='R'&&!al.has('R')) return `Почему фолд: ${who} ${fw} только в ${pc0(pf)} раздач, а чистому блефу нужно ${pc0(need)}. Если коллируют, у ${ph} лишь ≈${pc0(eq)} эквити против руки BB${dom>=.12?', и часто у него та же карта с кикером старше':''}${isSB(p)?', да ещё без позиции':''}. Опен здесь в минус.`;
+    if(a==='F'&&al.has('R')) return `Почему рейз: ${who} ${fw} в ${pc0(pf)} раздач, а если коллируют, у ${ph} ≈${pc0(eq)} эквити против руки BB. Рейз приносит больше, чем фолд.`;
     return ''; }
   if(d.kind==='vsopen'&&d.op!=null){
     const o=d.op, wo=chW(RFI[rfiKey(o)]), eq=eqQuick(x.cards,wo), dom=domShare(hh,wo);
     const heroBet=d.curBet-d.toCall, dead=(isSB(o)?0:SBA)+(isBB(o)?0:BB)-(isSB(d.p)||isBB(d.p)?heroBet:0), pot=d.curBet*(1+(d.callers||0))+heroBet+Math.max(0,dead), need=d.toCall/(pot+d.toCall);
-    const oop=isSB(d.p)||isBB(d.p)&&!isSB(o), behind=!isBB(d.p);
-    const odds=`Колл ${d.toCall} в банк ${pot}: нужно ≈${pc0(need)} эквити`;
-    if(a==='C'&&!al.has('C')&&!al.has('R')) return `Почему фолд: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити${dom>=.12?`, в ${pc0(dom)} случаев у опенера рука, которая тебя доминирует`:''}. ${odds}, но это эквити ${oop?'без позиции реализуется хуже: часть банков придётся отдать на ставках после флопа':'реализуется не полностью'}${behind?', а игроки сзади ещё могут сквизнуть':''}.${fe?` ${cap(ph)} — ${fe}.`:''}`;
-    if(a==='F'&&(al.has('C')||al.has('R'))) return `Почему играть: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити. ${odds}${eq>need?' — запас есть':''}${isBB(d.p)?', и ты закрываешь действие: сзади никто не повысит':''}. Сброс отдаёт банк, который эта рука выигрывает в долгую.`;
-    if(a==='R'&&!al.has('R')) return `Почему не 3-бет: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити. На 3-бет опенер продолжит в основном сильной частью диапазона, против которой рука в плохой форме${dom>=.12?` (в ${pc0(dom)} случаев у него доминирующая рука)`:''}, а сбросит то, что ты и так обыгрываешь. ${al.has('C')?'Колл держит в банке его слабые руки.':'Для блеф-3-бета у руки нет блокеров (туза или короля) и эквити, поэтому здесь фолд.'}`;
-    if(a==='C'&&al.has('R')&&al.has('F')&&!al.has('C')) return `Почему не колл: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити, но ${oop?'без позиции':'в этой точке'}${behind?' и с BB за спиной':''} колл реализует его плохо: банк часто уходит на ставках после флопа${behind?', а BB может сквизнуть':''}. Поэтому GTO играет такую руку либо 3-бетом (часто забирает банк сразу), либо сбрасывает.`;
-    if(a==='C'&&al.has('R')&&!al.has('C')) return `Почему 3-бет: против диапазона опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити${eq>=.5?' — рука сильнее большей части его диапазона':''}. Рейз забирает больше денег у худших рук${oop?' и не даёт играть без позиции в банке на двоих-троих':''}.`;
+    const oop=isSB(d.p)||isBB(d.p)&&!isSB(o), behind=!isBB(d.p), vs=`Против опена с ${lab(o)} у ${ph} ≈${pc0(eq)} эквити`;
+    if(a==='C'&&!al.has('C')&&!al.has('R')) return `Почему фолд: ${vs.charAt(0).toLowerCase()+vs.slice(1)}${dom>=.12?', часто у него та же карта с кикером старше':''}. ${eq>need?`Формально для колла хватает (нужно ≈${pc0(need)}), но ${oop?'без позиции':'после флопа'} это эквити реализуется хуже${behind?', а сзади ещё могут сквизнуть':''}.`:`Для колла нужно ≈${pc0(need)}.`} Колл в минус.`;
+    if(a==='F'&&(al.has('C')||al.has('R'))) return `Почему играть: ${vs.charAt(0).toLowerCase()+vs.slice(1)}, а для колла нужно ≈${pc0(need)}${isBB(d.p)?'. Ты закрываешь действие, сзади никто не повысит':''}. Фолд отдаёт банк, который рука выигрывает в долгую.`;
+    if(a==='R'&&!al.has('R')) return `Почему не 3-бет: на 3-бет опенер продолжит в основном сильными руками, против которых ${ph} в плохой форме, а сбросит то, что ты и так обыгрываешь. ${al.has('C')?'Колл оставляет в банке его слабые руки.':'Для блеф-3-бета у руки нет туза или короля, поэтому фолд.'}`;
+    if(a==='C'&&al.has('R')&&al.has('F')&&!al.has('C')) return `Почему не колл: ${oop?'без позиции':'здесь'}${behind?' и с BB за спиной':''} колл плохо реализует эквити ${ph} (≈${pc0(eq)}). Такую руку GTO либо 3-бетит, чтобы забрать банк сразу, либо сбрасывает.`;
+    if(a==='C'&&al.has('R')&&!al.has('C')) return `Почему 3-бет: ${vs.charAt(0).toLowerCase()+vs.slice(1)}${eq>=.5?', это сильнее большей части его диапазона':''}. Рейзом берёшь больше с худших рук${oop?' и не играешь без позиции':''}.`;
     return ''; }
   return ''; } catch(e){ return ''; } }
 function gridEl(x){
@@ -1603,7 +1602,7 @@ function postBlock(h,x,i){
 function setGame(g){ showRanges(false);
   if(g==='prof'&&!REC){ SAVEDF=filter; filter='all'; } else if(g!=='prof'&&REC){ filter=SAVEDF; }
   GAME=g; REC=g==='prof'; MODE=REC?'gto':STYLE; $('#m-prof').setAttribute('aria-pressed',g==='prof'); $('#m-pre').setAttribute('aria-pressed',g==='pre'); $('#m-hand').setAttribute('aria-pressed',g==='hand');
-  $('#style').classList.toggle('hide',REC); $('#filters').classList.toggle('hide',REC); updScore();
+  $('#style').classList.toggle('hide',REC); $('#filters').classList.toggle('hide',REC); $('#stats').hidden=g!=='pre'; updScore();
 
 }
 
@@ -2324,13 +2323,7 @@ function renderResults(){ syncRun();
   const lh=document.createElement('p'); lh.className='hint'; lh.style.margin='0'; lh.textContent='Раздачи. Нажми на строку, чтобы открыть разбор.';
   v.append(lh,list);
   const nb=document.createElement('button'); nb.className='next'; nb.id='newprof'; nb.textContent='Новый профиль'; nb.onclick=()=>{ RUN=null; RS=null; idle(); };
-  const sh=document.createElement('div'); sh.className='verdict'; sh.style.display='grid'; sh.style.gap='8px';
-  const st2=document.createElement('p'); st2.className='hint'; st2.style.margin='0';
-  const cp=document.createElement('button'); cp.type='button'; cp.className='next'; cp.id='copyres'; cp.textContent='Скопировать результат';
-  cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(JSON.stringify(RS)); cp.textContent='Скопировано, отправь Саше'; }catch(e){ cp.textContent='Не удалось скопировать'; } };
-  const upd=()=>{ st2.textContent=DBST==='ok'?'Результат отправлен Саше.':DBST==='wait'?'Отправляем результат…':'Результат не удалось отправить (нет интернета?). Скопируй его и отправь Саше в мессенджер.'; };
-  upd(); setTimeout(upd,2500); sh.append(st2,cp);
-  p.append(v,sh,nb); updScore();
+  p.append(v,nb); updScore();
   try{ v.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
 }
 function recExport(){ return JSON.stringify(S.recs||[]); }
