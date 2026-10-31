@@ -1803,10 +1803,13 @@ function irtScore(run){ const items=[];
 // Y — агрессия: доля рейзов там, где GTO коллирует или сбрасывает, минус доля коллов там, где GTO рейзит (±1 — всегда). Ситуации весят как в квоте теста,
 // чтобы точки теста и профиля были сравнимы; sx, sy — погрешность (1σ) из оценок границ.
 const XY_KX=1.5, XY_KY=2, clamp1=v=>Math.max(-1,Math.min(1,v));
+// калибровка ширины: бот, играющий строго по чартам (миксы — с частотой солвера), по подгонке порога выходит на ~17% «уже» GTO
+// из-за асимметрии логистической подгонки на краю диапазона; делим на этот сдвиг, чтобы идеальная игра стояла в центре
+const XY_RX0=.834;
 function styleXY(fits,D,acc){ let W=0,V=0,Vg=0,P=0,Pg=0,vV=0,vP=0;
   for(const f of fits){ const w=SQUOTA[f.sg]||0; if(!w) continue; W+=w; V+=w*f.t; Vg+=w*f.q; P+=w*f.tr; Pg+=w*f.qr; vV+=(w*f.sd)**2; vP+=(w*(f.sdr||f.sd))**2; }
   if(!W||!Vg||!Pg) return null; V/=W; Vg/=W; P/=W; Pg/=W; const sV=Math.sqrt(vV)/W, sP=Math.sqrt(vP)/W, Vs=Math.max(.02,V), Ps=Math.max(.01,Math.min(P,V));
-  const rx=Vs/Vg, ag=(D.a+.05)/(D.ao+1), pa=(D.p+.05)/(D.po+1);
+  const rx=Vs/Vg/XY_RX0, ag=(D.a+.05)/(D.ao+1), pa=(D.p+.05)/(D.po+1);
   const sx=sV/Vs/Math.LN2/XY_KX, sy=Math.sqrt(ag*(1-ag)/(D.ao+1)+pa*(1-pa)/(D.po+1));
   // разброс: ошибки в обе стороны (то шире, то уже GTO; то рейз вместо колла, то колл вместо рейза) усредняются к центру,
   // поэтому область растягиваем на их долю — так видно, что игра нестабильная, даже если среднее похоже на GTO
@@ -1909,7 +1912,9 @@ function addBlobs(xy,fits,DS,D,DC,RC){ const B=[], rt=(u,v)=>(u+.05)/(v+1);
     return {x:dx>0?1.1*dx:2*dx,y:ag-pa,nx:d.lo+d.to,ny:d.ao+d.po,sx:Math.sqrt(lo*(1-lo)/(d.lo+1)+4*ti*(1-ti)/(d.to+1)),sy:Math.sqrt(ag*(1-ag)/(d.ao+1)+pa*(1-pa)/(d.po+1))}; };
   const g=pos(D), put=(p,w,kind)=>{ const fx=p.nx/(p.nx+XY_SHK), fy=p.ny/(p.ny+XY_SHK);
     B.push({x:clamp1(xy.x+(p.x-g.x)*fx),y:clamp1(xy.y+(p.y-g.y)*fy),sx:Math.max(.07,Math.min(.25,fx*p.sx)),sy:Math.max(.07,Math.min(.25,fy*p.sy)),w,kind}); };
-  for(const f of fits){ const d=DS[f.sg]; if(!d||f.n<3) continue; put(pos(d),d.n,'sit'); }
+  const RAW=[]; for(const f of fits){ const d=DS[f.sg]; if(!d||f.n<3) continue; const p=pos(d); put(p,d.n,'sit'); if(f.n>=15) RAW.push({x:p.x,y:p.y,w:d.n}); }
+  // непоследовательность — по сырым (не стянутым) точкам ситуаций с достаточной выборкой: усреднение не должно прятать реальный разброс
+  const RW=RAW.reduce((a,b)=>a+b.w,0)||1, rmx=RAW.reduce((a,b)=>a+b.w*b.x,0)/RW, rmy=RAW.reduce((a,b)=>a+b.w*b.y,0)/RW, rspr=RAW.length>=2?Math.sqrt(RAW.reduce((a,b)=>a+b.w*((b.x-rmx)**2+(b.y-rmy)**2),0)/RW):0;
   const T=(DC||[]).filter(c=>c&&c.n>=40);
   if(T.length>=2){ const sw=B.reduce((a,b)=>a+b.w,0)||1; const tw=[1,.6,.4]; const tws=T.reduce((a,c,i)=>a+(tw[i]||.3),0); T.forEach((c,i)=>put(pos(c),sw*(tw[i]||.3)/tws,'time'));
     const t0=B.find(b=>b.kind==='time'), tl=B.filter(b=>b.kind==='time').pop(); xy.drift=Math.hypot(t0.x-tl.x,t0.y-tl.y); }
@@ -1924,7 +1929,7 @@ function addBlobs(xy,fits,DS,D,DC,RC){ const B=[], rt=(u,v)=>(u+.05)/(v+1);
   const mx=B.reduce((a,b)=>a+b.w*b.x,0)/W, my=B.reduce((a,b)=>a+b.w*b.y,0)/W, spr=Math.sqrt(B.reduce((a,b)=>a+b.w*((b.x-mx)**2+(b.y-my)**2),0)/W);
   const S=B.filter(b=>b.kind==='sit'), SW=S.reduce((a,b)=>a+b.w,0)||1, smx=S.reduce((a,b)=>a+b.w*b.x,0)/SW, smy=S.reduce((a,b)=>a+b.w*b.y,0)/SW,
     sspr=Math.sqrt(S.reduce((a,b)=>a+b.w*((b.x-smx)**2+(b.y-smy)**2),0)/SW);
-  xy.blobs=B; xy.spread=spr; xy.sspread=sspr; if(sspr>=.35) xy.incons=true; if(spr>.1){ xy.hx=Math.max(xy.hx,.11); xy.hy=Math.max(xy.hy,.11); } }
+  xy.blobs=B; xy.spread=spr; xy.sspread=sspr; if(rspr>=.4) xy.incons=true; if(spr>.1){ xy.hx=Math.max(xy.hx,.11); xy.hy=Math.max(xy.hy,.11); } }
 // рисует облако плотностью на канвасе: заливка там, где плотность ≥ 22% от максимума, край чуть темнее
 function cloudURL(B,col){ const G=200, cv=document.createElement('canvas'); cv.width=cv.height=G; const c=cv.getContext('2d'), im=c.createImageData(G,G), D=new Float32Array(G*G); let mx=0;
   for(let j=0;j<G;j++) for(let i=0;i<G;i++){ const u=-1+2*(i+.5)/G, v=1-2*(j+.5)/G; let d=0;
