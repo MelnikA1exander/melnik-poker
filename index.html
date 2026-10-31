@@ -209,6 +209,8 @@ html:has(.sheet),html:has(.sheet) body{overflow:hidden}
 .pstats b{display:block;font:700 18px var(--f-mono);font-variant-numeric:tabular-nums}
 .pstats span{font-size:12px;color:var(--muted)}
 .tips{margin:0;padding-left:18px;display:grid;gap:6px}
+.advice{margin:0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--chip) 45%,transparent);border-left:4px solid var(--chip);border-radius:10px;background:color-mix(in srgb,var(--chip) 11%,var(--surface));font-style:italic;color:var(--ink);line-height:1.45}
+.advice .tips{font-style:italic}
 .hlist{display:grid;border-top:1px solid var(--line)}
 .hrow{display:grid;grid-template-columns:26px 54px 44px 1fr auto 14px;gap:8px;align-items:center;text-align:left;font:500 13px var(--f-body);color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--line);padding:10px 2px;cursor:pointer;width:100%}
 .hrow:hover{background:var(--sunk)}
@@ -1641,6 +1643,7 @@ function sitWant(E){ const k=RUN.hands.length; let best=null,bs=-1;
   for(const [sg,T] of Object.entries(SQUOTA)){ const e=E[sg], due=T*(k+1)/PROF_N-e.n, ms=sitMiss(sg); if(e.n>=T*1.6||ms>=3) continue;
     const s=e.sd*(1+Math.max(0,due))*(due>.5?2:1)/(1+ms); if(s>bs){ bs=s; best=sg; } } return best; }
 // в защите часть раздач целим в границу 3-бета, а не колла
+function need4b(){ let have=0; for(const h of RUN.hands) if((h.cats||[]).includes('4bet')) have++; return have<2&&2*(RUN.hands.length+1)/PROF_N-have>.4; }
 function need3b(){ let have=0; for(const h of RUN.hands) if((h.cats||[]).includes('3bet')) have++; return 6*(RUN.hands.length+1)/PROF_N-have>.5; }
 // овершут: сначала заметно дальше от текущей оценки границы (по очереди сильнее и слабее), с ростом данных разброс сужается
 function bandKeep(pos,c){ return Math.abs(pos-c)<=.06?1:(pos<c?.2:.03); }
@@ -1664,12 +1667,12 @@ function gtoPath(seed,open){ Math.random=seeded(seed); const h=setupHand(); H=h;
 function recPick(h,d,seed,t,E,want){ const hh=h.players[h.hero].h, s0=sitOf(h,{d}); let sg=s0, mode='y', kw;
   const strict=want&&t<1500;
   if(strict){
-    if(want==='vs3b'){ if(!s0||!s0.startsWith('open')||HPOS[hh]>Math.max(E[s0].t,E[s0].q)) return null; sg='vs3b'; }
+    if(want==='vs3b'){ if(!s0||!s0.startsWith('open')||HPOS[hh]>Math.max(E[s0].t,E[s0].q)) return null; sg='vs3b'; if(t<1000&&need4b()&&HPOS[hh]>.06) return null; }
     else if(s0!==want) return null;
     if(sg.startsWith('def')&&need3b()) mode='yr'; }
   if(sg) kw=recKeep(h,d,E,sg,mode); else { kw=bandKeep(HPOS[hh],widthOf(d.ch,PLAYK)); h.probe=null; }
   if(NATIVE_RANDOM()>=kw) return null;
-  const probe=h.probe, P=gtoPath(seed,sg==='vs3b'); if(strict&&sg==='vs3b'&&!P.v3) return null;
+  const probe=h.probe, P=gtoPath(seed,sg==='vs3b'); if(strict&&sg==='vs3b'&&!P.v3) return null; if(strict&&sg==='vs3b'&&t<1000&&need4b()&&!P.cats.has('4bet')) return null;
   Math.random=seeded(seed); const r=setupHand(); H=r; run(r); // настоящая раздача с того же зерна
   r.keepW=kw||1; r.seed=seed; r.cats=[...P.cats]; r.probe=probe; if(strict) r.want=want; return r; }
 // повторы: 3 раза за тест та же раздача у границы (те же карты и действия до игрока, другие масти), чтобы проверить стабильность
@@ -1947,7 +1950,7 @@ function cloudURL(B,col){ const G=200, cv=document.createElement('canvas'); cv.w
   c.putImageData(im,0,0); return cv.toDataURL(); }
 function profAnalyze(run){
   const G={}, SE={}; let nDec=0,good=0,goodA=0; const errs={}, outs=[]; const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0};
-  const F={e3:0,fo:0,fp:[],po:0,pf:[],ro:0,rc:[],ao:0,ar:[],lo:0,lim:0,vo:0,v3:0,vc:0,vf:0,g3:0,gc:0,gf:0,to:0,tf:0,tc:0,t4:0,bp:0,bpf:0,bf:0,bfp:0,tp:0,tpf:0};
+  const F={er:[0,0,0],et:[0,0,0],e3:0,fo:0,fp:[],po:0,pf:[],ro:0,rc:[],ao:0,ar:[],lo:0,lim:0,vo:0,v3:0,vc:0,vf:0,g3:0,gc:0,gf:0,to:0,tf:0,tc:0,t4:0,bp:0,bpf:0,bf:0,bfp:0,tp:0,tpf:0};
   let plW=0,shW=0; // общий коэффициент ширины по сырым данным, нужен как стартовое ожидание
   for(const h of run.hands){ const w=1/(h.keepW||1), hi=run.hands.indexOf(h); let first=true;
     for(const x of h.decisions.filter(x=>!x.post)){ nDec++; if(x.g===2) good++; if(x.g>=1) goodA++;
@@ -1964,9 +1967,9 @@ function profAnalyze(run){
       if(pPlay&&gRaise&&!gNoRaise){ F.ro++; if(x.a==='C') F.rc.push([1,ex]); }
       if(pPlay&&gNoRaise&&!gRaise){ F.ao++; if(x.a==='R') F.ar.push([1,ex]); }
       if(x.d.kind==='open'&&!isBB(h.hero)){ F.lo++; if(x.a==='C') F.lim++; }
-      if(x.d.kind==='vsopen'){ F.vo++; F[x.a==='R'?'v3':x.a==='C'?'vc':'vf']++; { const fq=x.d.ch.f&&x.d.ch.f[x.h]; F.e3+=fq!=null?(Array.isArray(fq)?fq[0]:fq):(x.al.includes('R')?1/x.al.length:0); } const g=x.al.includes('R')&&x.al.length===1?'g3':x.al.includes('C')&&!x.al.includes('F')?'gc':x.al.includes('F')&&x.al.length===1?'gf':null; if(g) F[g]++; }
+      if(x.d.kind==='vsopen'){ { const e=expRCF(x); for(let i=0;i<3;i++) F.er[i]+=e[i]; } F.vo++; F[x.a==='R'?'v3':x.a==='C'?'vc':'vf']++; { const fq=x.d.ch.f&&x.d.ch.f[x.h]; F.e3+=fq!=null?(Array.isArray(fq)?fq[0]:fq):(x.al.includes('R')?1/x.al.length:0); } const g=x.al.includes('R')&&x.al.length===1?'g3':x.al.includes('C')&&!x.al.includes('F')?'gc':x.al.includes('F')&&x.al.length===1?'gf':null; if(g) F[g]++; }
       if(sitOf(h,x)==='def-BB'){ if(gPlay&&!gFold){ F.bp++; if(!pPlay) F.bpf++; } if(gFold&&!gPlay){ F.bf++; if(pPlay) F.bfp++; } }
-      if(x.d.kind==='vs3b'){ if(gPlay&&!gFold){ F.tp++; if(!pPlay) F.tpf++; } F.to++; F[x.a==='R'?'t4':x.a==='C'?'tc':'tf']++; }
+      if(x.d.kind==='vs3b'){ { const e=expRCF(x); for(let i=0;i<3;i++) F.et[i]+=e[i]; } if(gPlay&&!gFold){ F.tp++; if(!pPlay) F.tpf++; } F.to++; F[x.a==='R'?'t4':x.a==='C'?'tc':'tf']++; }
       if(gFold&&!gPlay){ D.lo+=w*sev; if(pPlay) D.l+=w*sev; }
       if(gPlay&&!gFold){ D.to+=w*sev; if(!pPlay) D.t+=w*sev; }
       if(pPlay&&gPlay&&gRaise&&!gNoRaise){ D.po+=w; if(x.a==='C') D.p+=w; }
@@ -2003,13 +2006,17 @@ function profAnalyze(run){
   // факты об игре этого человека, без общих описаний типа
   const exs=l=>l.sort((a,b)=>b[0]-a[0]).slice(0,3).map(e=>e[1]).join(', ');
   const facts=[];
-  if(F.fo) facts.push(`Из ${F.fo} рук, которые по GTO надо сбросить, сыграл ${F.fp.length}${F.fp.length?`: ${exs(F.fp)}`:''}.`);
-  if(F.po) facts.push(`Из ${F.po} рук, которые по GTO надо играть, сбросил ${F.pf.length}${F.pf.length?`: ${exs(F.pf)}`:''}.`);
-  if(F.ro) facts.push(`Там, где GTO рейзит, сыграл коллом ${F.rc.length} раз из ${F.ro}${F.rc.length?`: ${exs(F.rc)}`:''}.`);
-  if(F.ar.length) facts.push(`Рейзил там, где GTO коллирует или сбрасывает, ${F.ar.length} раз: ${exs(F.ar)}.`);
-  if(F.lo) facts.push(F.lim?`Лимпил первым в банк ${F.lim} раз из ${F.lo}.`:`Первым в банк ни разу не лимпил (${F.lo} раз из ${F.lo} рейз или фолд).`);
-  if(F.vo) facts.push(`Против опена (${F.vo} раз): 3-бет ${F.v3}, колл ${F.vc}, фолд ${F.vf}.`);
-  if(F.to) facts.push(`Против 3-бета (${F.to} раз): 4-бет ${F.t4}, колл ${F.tc}, фолд ${F.tf}.`);
+  const ex2=l=>[...new Set(l.slice().sort((a,b)=>b[0]-a[0]).map(e=>e[1]))].slice(0,2).join(', ');
+  const cmpG=(n,e)=>{ const d=n-e, t=Math.max(1.5,e*.35); return Math.abs(d)<t?'как GTO':d>0?'чаще GTO':'реже GTO'; }, rr=Math.round;
+  const fl=F.fo?F.fp.length/F.fo:0;
+  if(F.fo){ const s=fl; facts.push(`Лишние руки: сыграл ${F.fp.length} из ${F.fo}, которые по GTO сбрасываются${F.fp.length?` (например, ${ex2(F.fp)})`:''} — ${s>=.25?'много, это главный лик':s>=.1?'заметно больше нормы':s>0?'почти чисто':'чисто'}.`); }
+  if(F.po){ const s=F.pf.length/F.po; facts.push(`Сбросы: выбросил ${F.pf.length} из ${F.po} рук, которые по GTO надо играть${F.pf.length?` (например, ${ex2(F.pf)})`:''} — ${s>=.25?'слишком тайтово':s>=.1?'немного тайтовее GTO':s>0?'почти чисто':'чисто'}.`); }
+  if(F.ro){ const s=F.rc.length/F.ro; facts.push(s===0?`Где GTO рейзит, ты всегда рейзил (${F.ro} из ${F.ro}) — отлично.`:`Где GTO рейзит, сыграл коллом ${F.rc.length} из ${F.ro} (например, ${ex2(F.rc)}) — ${s>=.25?'слишком пассивно':'чуть пассивнее GTO'}.`); }
+  if(F.ar.length&&fl<.2) facts.push(`Рейзил там, где GTO не рейзит, ${F.ar.length} ${plw(F.ar.length,'раз','раза','раз')} — ${F.ar.length>=5?'слишком агрессивно':'немного агрессивнее GTO'}.`);
+  if(F.lo) facts.push(F.lim?`Лимпил первым ${F.lim} из ${F.lo} раз — по GTO первым входят только рейзом.`:'Первым в банк входил только рейзом, без лимпов — как GTO.');
+  const freq=(nm,n,e)=>n||e>=.5?`${nm} ${n} (GTO ≈${rr(e)}, ${cmpG(n,e)})`:null;
+  if(F.vo) facts.push(`Против опена (${F.vo} ${plw(F.vo,'раз','раза','раз')}): `+[freq('3-бет',F.v3,F.er[0]),freq('колл',F.vc,F.er[1]),freq('фолд',F.vf,F.er[2])].filter(Boolean).join(', ')+'.');
+  if(F.to) facts.push(`Против 3-бета (${F.to} ${plw(F.to,'раз','раза','раз')}): `+[freq('4-бет',F.t4,F.et[0]),freq('колл',F.tc,F.et[1]),freq('фолд',F.tf,F.et[2])].filter(Boolean).join(', ')+'.');
   return {F,SE,goodA,xy,outs,nh:E._nh,tells:sizeTells(run),reps:repStats(run),irt:irtScore(run),facts,V:V*100,Vc:Vg*100,P:P*100,Pc:Pg*100,L,acc,nDec,good,type:T[0],short:T[1],conf,traits,rows,ranked,lo,ti,pa,ag,dev};
 }
 // ---- советы по итогам GTO теста: лики относительно GTO, сайзинг относительно GTO и как подстраиваться под соперников ----
@@ -2052,8 +2059,37 @@ function gtoSizing(run){ const G={open:[],vsopen:[],vs3b:[]}, out=[];
   for(const [ip,nm,gto] of [[true,'в позиции','×2,2–2,5 от 3-бета'],[false,'без позиции','×2,5–3 от 3-бета']]){ const l=G.vs3b.filter(x=>x.ip===ip&&!x.allin); if(!l.length) continue;
     out.push(`4-бет ${nm}: обычно ×${fx(med(l.map(x=>x.v)))}, в GTO ${gto}. `+verdict(l,'При 125 ББ 4-бет крупнее ×3 почти коммитит стек: тогда честнее сразу олл-ин с узким диапазоном.','Слишком мелкий 4-бет даёт 3-беттору дешёвый колл и пятый бет.')); }
   const J=G.vs3b.filter(x=>x.allin); if(J.length) out.push(`4-бет олл-ин: ${J.length} раз. При 125 ББ GTO почти не пушит на 4-бет, а ставит ×2,2–3 и уже на 5-бет идёт олл-ин; пуш сразу отдаёт сопернику простое решение.`);
-  if(!G.vs3b.length&&G.vsopen.length) out.push('4-бетов в тесте не было, поэтому их размер не оценён.');
-  return out; }
+  const same=out.filter(t=>/Размер как в GTO\.$/.test(t)), rest=out.filter(t=>!/Размер как в GTO\.$/.test(t));
+  if(same.length) rest.push('Как в GTO: '+same.map(t=>{ const m=t.match(/^([^:]+): обычно ([^,]+(?:,\d+)?)/); return m?`${lc1(m[1])} (${m[2].replace(/\s*\(.*$/,'')})`:lc1(t.split(':')[0]); }).join(', ')+'.');
+  return rest; }
+// ожидаемые доли рейза/колла/фолда по GTO для решения (миксы — с частотой)
+function expRCF(x){ const al=x.al, fq=x.d.ch.f&&x.d.ch.f[x.h]; let p=[al.includes('R')?1:0,al.includes('C')?1:0,al.includes('F')?1:0];
+  if(fq!=null&&al.length>1){ const [r,c]=Array.isArray(fq)?fq:[fq,0]; const q=[r,c,Math.max(0,1-r-c)].map((v,i)=>v*p[i]); if(q[0]+q[1]+q[2]>0) p=q; }
+  const t=p[0]+p[1]+p[2]||1; return p.map(v=>v/t); }
+// советы-выводы в конце блоков итога
+function advHow(A){ const F=A.F, o=[], ex2=l=>[...new Set(l.slice().sort((a,b)=>b[0]-a[0]).map(e=>e[1].replace(/ \(.*/,'')))].slice(0,2).join(', ');
+  const fl=F.fo?F.fp.length/F.fo:0, ft=F.po?F.pf.length/F.po:0, fr=F.ro?F.rc.length/F.ro:0;
+  if(F.fo>=4&&fl>=.15) o.push(`Сбрасывай руки за границей диапазона (как ${ex2(F.fp)}): по GTO они не окупаются, и это самый дорогой лик теста.`);
+  if(F.po>=4&&ft>=.15) o.push(`Не выбрасывай руки из диапазона (как ${ex2(F.pf)}): по GTO они приносят плюс.`);
+  if(F.ro>=4&&fr>=.15) o.push('Там, где GTO рейзит, рейзи: колл с сильной рукой отдаёт соперникам дешёвый флоп.');
+  if(F.lo&&F.lim) o.push('Первым в банк заходи только рейзом, лимп по GTO не используется.');
+  const d3=F.v3-F.er[0], t3=Math.max(2,F.er[0]*.4);
+  if(F.vo>=5&&d3>=t3) o.push(`Против опена 3-бети реже: у тебя ${F.v3}, по GTO ≈${Math.round(F.er[0])}. Лишние 3-беты лучше заменить коллом в позиции или фолдом.`);
+  else if(F.vo>=5&&-d3>=t3) o.push(`Против опена 3-бети чаще: у тебя ${F.v3}, по GTO ≈${Math.round(F.er[0])}. Кроме вэлью добавь блефы с блокерами (A5s–A2s).`);
+  const df=F.tf-F.et[2], tf=Math.max(2,F.et[2]*.4);
+  if(F.to>=3&&df>=tf) o.push(`На 3-бет сбрасываешь чаще GTO (${F.tf} против ≈${Math.round(F.et[2])}): защищай опен коллом и 4-бетом.`);
+  else if(F.to>=3&&-df>=tf) o.push(`На 3-бет продолжаешь слишком часто (фолд ${F.tf} против ≈${Math.round(F.et[2])} у GTO): слабые опены против 3-бета — фолд.`);
+  return o.length?o.slice(0,2).join(' '):'Частоты близки к GTO — так и продолжай.'; }
+function advRanges(A){ const pc=x=>Math.round(x*100)+'%'; let best=null,bv=0;
+  for(const x of A.rows){ if(x.n+Math.min(x.nh,3)<3) continue; const tc=Math.min(.99,x.t/XY_RX0), r=tc/Math.max(.01,x.q), dd=clsDiffs(x).filter(c=>r>1?c.d>0:c.d<0), v=Math.abs(Math.log(r))+(dd.length?.5:0); if((r>1.3||r<.72)&&v>bv){ bv=v; best={x,tc,r}; } }
+  if(!best) return 'Ширина диапазонов по ситуациям близка к GTO — держи её.';
+  const {x,tc,r}=best, wide=r>1, d=clsDiffs(x).filter(c=>wide?c.d>0:c.d<0)[0];
+  return `${SIT[x.sg]}: ты играешь ${pc(tc)} рук, а GTO ${pc(x.q)}. `+(d?`${wide?'Убери':'Добавь'} ${HCLS[d.kk]}: по GTO их играют ${pc(d.g)}, у тебя ${pc(d.p)}.`:wide?'Сузь диапазон до чарта: сначала убери самые слабые руки.':'Расширь диапазон до чарта: добавь руки у границы.'); }
+function advSize(run){ const l=gtoSizing(run), o=[];
+  if(l.some(t=>/^Опен:.*(Крупнее|Мельче) GTO/.test(t))||l.some(t=>/^Опен из SB:.*(Крупнее|Мельче) GTO/.test(t))) o.push('Открывай 2,5 ББ (из SB около 3 ББ) одним размером на весь диапазон.');
+  if(l.some(t=>/^3-бет.*(Крупнее|Мельче) GTO/.test(t))) o.push('3-бет: ×3 от опена в позиции и ×4–4,5 без позиции.');
+  if(l.some(t=>/^4-бет.*(Крупнее|Мельче) GTO|^4-бет олл-ин/.test(t))) o.push('4-бет: ×2,2–3 от 3-бета, олл-ин оставь для 5-бета.');
+  return o.length?o.join(' '):'Размеры ставок как в GTO — так и оставь.'; }
 // уровень игрока задаёт тон: хорошему — мелкая настройка, слабому — больше базовых правил
 const plw=(n,a,b,c)=>{ const m=n%10, h=n%100; return m===1&&h!==11?a:m>=2&&m<=4&&(h<10||h>=20)?b:c; };
 // короткий итог теста в сравнении с GTO: 3–5 фраз с цифрами
@@ -2138,6 +2174,7 @@ function profTips(A,run){ const lvl=tipLevel(A), z=A.xy?zoneOf(A.xy):['ok','bal'
   if(!HARD.length&&!EDGE.length) K.push(lvl==='good'?'Явных ликов нет. Держи GTO как базу и отклоняйся только против соперников с заметным перекосом (см. ниже).':'Явных ликов по ситуациям не видно, работай над пунктами выше.');
   if(TPS(run)) K.push(TPS(run));
   return {lvl,intro,keep:K,tips:T.slice(0,lvl==='good'?4:lvl==='mid'?7:9),adapt:W,sizing:gtoSizing(run)}; }
+function advEl(t){ const d=document.createElement('div'); d.className='advice'; if(t) d.textContent=t; return d; }
 function renderResults(){ syncRun();
   const p=$('#panel'); p.innerHTML=''; const run=RUN, A=profAnalyze(run), pc=x=>Math.round(x)+'%';
   if(RS&&!RS.summary){ S.recs=(S.recs||[]).concat([RS]); trimRecs(); RS.summary={type:A.type,gto:A.irt?Math.round(A.irt.score):null,conf:A.conf,loose:Math.round(A.lo*100),tight:Math.round(A.ti*100),passive:Math.round(A.pa*100),aggr:Math.round(A.ag*100),vpip:Math.round(A.V),vpipGto:Math.round(A.Vc),pfr:Math.round(A.P),pfrGto:Math.round(A.Pc),traits:A.traits,acc:Math.round(A.acc),hands:run.hands.length,hist:A.nh,ranges:A.rows.map(x=>({s:x.sg,n:x.n,nh:x.nh,play:Math.round(x.t*100),gto:Math.round(x.q*100),raise:Math.round(x.tr*100),raiseGto:Math.round(x.qr*100),
@@ -2157,7 +2194,7 @@ function renderResults(){ syncRun();
     v.appendChild(g); }
   if(A.facts.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Как играл</b>'; const ul=document.createElement('ul'); ul.className='tips';
     for(const f of A.facts.concat(A.traits.length?['По границам диапазонов: '+A.traits.join(', ')+'.']:[])){ const li=document.createElement('li'); li.textContent=f; ul.appendChild(li); }
-    v.append(h3,ul); }
+    v.append(h3,ul,advEl(advHow(A))); }
   const st=document.createElement('div'); st.className='pstats';
   const dv=k=>{ const [x,o]=A.dev[k]; return o<.5?'—':pc(x/o*100); };
   const tiles=[[dv('loose'),'играет руки, которые GTO сбрасывает'],[dv('tight'),'сбрасывает руки, которые GTO играет'],[dv('passive'),'коллирует, где GTO рейзит'],[dv('aggr'),'рейзит, где GTO не рейзит'],[pc(A.V),`VPIP, по GTO ${pc(A.Vc)}`],[pc(A.P),`PFR, по GTO ${pc(A.Pc)}`],[`${A.good}/${A.nDec}`,'верных решений']];
@@ -2174,14 +2211,15 @@ function renderResults(){ syncRun();
     const cr=A.rows.filter(x=>x.n+Math.min(x.nh,3)>=3); if(cr.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Границы по классам рук</b>'; const ul=document.createElement('ul'); ul.className='tips';
       for(const x of cr){ const d=clsDiffs(x); const li=document.createElement('li'); li.textContent=`${SIT[x.sg]}: `+(d.length?d.slice(0,3).map(clsLine).join('; ')+'.':'по классам рук как GTO.'); ul.appendChild(li); }
       const ch=document.createElement('p'); ch.className='hint'; ch.style.margin='0'; ch.textContent='Сравнение долей: какую часть рук класса играет GTO (миксы — с их частотой) и какую ты. Показаны расхождения от 15% по классам, где решений достаточно.';
-      v.append(h3,ul,ch); } }
+      v.append(h3,ul,ch); }
+    v.appendChild(advEl(advRanges(A))); }
   const TP=profTips(A,run), extra=[...TP.sizing];
   for(const t of A.tells) extra.push(t.txt);
   if(A.reps.length){ const ch=A.reps.filter(r=>!r.same); extra.push(`Повторы одной и той же раздачи: сыграно так же ${A.reps.length-ch.length} из ${A.reps.length}${ch.length?'. Поменял решение: '+ch.map(r=>`${prettyHand(r.h)} (${r.pos}) ${r.a1} → ${r.a2}`).join(', '):''}.`); }
   if(A.outs.length) extra.push(`Не учтены в оценке как случайные: ${A.outs.join(', ')}.`);
   if(extra.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Сайзинг по сравнению с GTO</b>'; const ul=document.createElement('ul'); ul.className='tips';
-    for(const t of extra){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul); }
-  const sum=document.createElement('p'); sum.style.margin='0'; sum.innerHTML='<b>Советы</b> <span class="hint"></span>'; sum.lastChild.textContent=TP.intro; v.appendChild(sum);
+    for(const t of extra){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul,advEl(advSize(run))); }
+  const sum=document.createElement('p'); sum.style.margin='0'; sum.innerHTML='<b>Советы</b>'; v.append(sum,advEl(TP.intro));
   const top=A.ranked.filter(([k])=>k!=='other');
   // ссылки «раздача N»: открывают разбор этой раздачи в списке ниже и прокручивают к нему
   const HR=[]; const openHand=k=>{ const r=HR[k]; if(!r) return; if(r.row.getAttribute('aria-expanded')!=='true') r.row.click(); try{ r.row.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} r.row.classList.add('flash'); setTimeout(()=>r.row.classList.remove('flash'),1600); };
@@ -2198,9 +2236,9 @@ function renderResults(){ syncRun();
     const ul=document.createElement('ul'); ul.className='tips'; for(const [k,l] of top.slice(0,3)){ const li=document.createElement('li'); li.textContent=ERR_TXT[k][0]+'.'; const seen=new Set();
       addLinks(li,l.filter(e=>!seen.has(e.k)&&seen.add(e.k)).slice(0,4).map(e=>({label:e.t,k:e.k}))); ul.appendChild(li); } v.append(p1,ul); }
   { const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Против кого как играть</b>'; const ul=document.createElement('ul'); ul.className='tips';
-    for(const t of TP.adapt){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul); }
+    for(const t of TP.adapt.slice(0,4)){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul); if(TP.adapt.length>4) v.appendChild(advEl(TP.adapt.slice(4).join(' '))); }
   if(TP.keep.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Что взять себе</b>'; const ul=document.createElement('ul'); ul.className='tips';
-    for(const t of TP.keep){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul); }
+    for(const t of TP.keep){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } const bx=advEl(''); bx.appendChild(ul); v.append(h3,bx); }
   // таблица раздач
   const list=document.createElement('div'); list.className='hlist';
   run.hands.forEach((h,k)=>{ const ds=h.decisions.filter(x=>!x.post); if(!ds.length) return; const worst=Math.min(...ds.map(x=>x.g)), x0=ds[0];
