@@ -351,6 +351,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .xyplot .ctr{fill:var(--raise)}
 .xycap{margin:2px 0 0;font-size:13px;color:var(--muted);text-align:center}
 .xyplot.locked .xyrow svg,.xyplot.locked .szbar{filter:blur(2px);opacity:.55}
+.hlink{font:inherit;font-size:.92em;color:var(--raise);background:none;border:0;border-bottom:1px dashed currentColor;padding:0;cursor:pointer;margin:0 2px}.hlink:hover{border-bottom-style:solid}.hrow.flash{outline:2px solid var(--raise);outline-offset:2px;border-radius:8px}
 .xylock{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:max-content;max-width:min(70%,250px);box-sizing:border-box;display:grid;place-content:center;gap:6px;box-shadow:0 6px 18px rgba(0,0,0,.18);text-align:center;background:color-mix(in srgb,var(--surface) 88%,transparent);border:1px solid var(--line);border-radius:14px;padding:14px}
 .xyload{justify-items:center;perspective:400px;gap:8px;padding:14px 20px 12px}.xyload span{font-size:13px;color:var(--muted,inherit)}
 .xyplot svg.chipspin{width:44px;height:44px;animation:chipspin 1.4s cubic-bezier(.45,.05,.55,.95) infinite;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))}
@@ -1948,7 +1949,7 @@ function profAnalyze(run){
   const G={}, SE={}; let nDec=0,good=0,goodA=0; const errs={}, outs=[]; const D={l:0,lo:0,t:0,to:0,p:0,po:0,a:0,ao:0};
   const F={fo:0,fp:[],po:0,pf:[],ro:0,rc:[],ao:0,ar:[],lo:0,lim:0,vo:0,v3:0,vc:0,vf:0,g3:0,gc:0,gf:0,to:0,tf:0,tc:0,t4:0,bp:0,bpf:0,bf:0,bfp:0,tp:0,tpf:0};
   let plW=0,shW=0; // общий коэффициент ширины по сырым данным, нужен как стартовое ожидание
-  for(const h of run.hands){ const w=1/(h.keepW||1); let first=true;
+  for(const h of run.hands){ const w=1/(h.keepW||1), hi=run.hands.indexOf(h); let first=true;
     for(const x of h.decisions.filter(x=>!x.post)){ nDec++; if(x.g===2) good++; if(x.g>=1) goodA++;
       const ol=isOutlier(x.h,x.a,x.amt,x.al); if(ol){ outs.push(`${ol==='fold'?'сброс':'олл-ин'} ${prettyHand(x.h)} (${x.pos})`); first=false; continue; } // выброс: в оценку не идёт
       // отклонение от GTO для этой руки: вес тем больше, чем дальше рука от границы GTO-диапазона
@@ -1957,7 +1958,7 @@ function profAnalyze(run){
       const pPlay=x.a==='C'||x.a==='R';
       const ex=`${prettyHand(x.h)} (${x.pos})`;
       { const sg0=sitOf(h,x); if(sg0){ const e=SE[sg0]=SE[sg0]||{lo:0,l:[],to:0,t:[]}; // ошибки по ситуациям: прямой счёт, без подгонки границы
-        if(gFold&&!gPlay){ e.lo++; if(pPlay) e.l.push([sev,x.h]); } if(gPlay&&!gFold){ e.to++; if(!pPlay) e.t.push([sev,x.h]); } } }
+        if(gFold&&!gPlay){ e.lo++; if(pPlay) e.l.push([sev,x.h,hi,x.pos]); } if(gPlay&&!gFold){ e.to++; if(!pPlay) e.t.push([sev,x.h,hi,x.pos]); } } }
       if(gFold&&!gPlay){ F.fo++; if(pPlay) F.fp.push([sev,ex]); }
       if(gPlay&&!gFold){ F.po++; if(!pPlay) F.pf.push([sev,ex]); }
       if(pPlay&&gRaise&&!gNoRaise){ F.ro++; if(x.a==='C') F.rc.push([1,ex]); }
@@ -1970,7 +1971,7 @@ function profAnalyze(run){
       if(gPlay&&!gFold){ D.to+=w*sev; if(!pPlay) D.t+=w*sev; }
       if(pPlay&&gPlay&&gRaise&&!gNoRaise){ D.po+=w; if(x.a==='C') D.p+=w; }
       if(pPlay&&gNoRaise&&!gRaise){ D.ao+=w; if(x.a==='R') D.a+=w; }
-      const k=errKind(x); if(k){ (errs[k]=errs[k]||[]).push({t:`${prettyHand(x.h)} (${x.pos})`,sev:x.g===1?0:sev}); }
+      const k=errKind(x); if(k){ (errs[k]=errs[k]||[]).push({t:`${prettyHand(x.h)} (${x.pos})`,sev:x.g===1?0:sev,k:hi}); }
       const n=x.al.length; shW+=w*x.al.filter(a=>a==='C'||a==='R').length/n; if(x.a==='C'||x.a==='R') plW+=w;
       const sg=sitOf(h,x); if(!sg){ first=false; continue; }
       const g=G[sg]=G[sg]||{fw:0,lim:0}; if(x.a==='C'&&sg.startsWith('open')) g.lim++;
@@ -1997,7 +1998,7 @@ function profAnalyze(run){
   if(F.bf>=2&&F.bfp>=2&&F.bfp/F.bf>=.4) traits.push(`слишком широко защищает BB (${F.bfp} из ${F.bf} рук, которые по GTO сбрасывают)`);
   if(F.g3>=2&&F.v3<F.g3*.5) traits.push(`редко 3-бетит (${F.v3}, по GTO ${F.g3})`); else if(F.v3>=3&&F.v3>F.g3*1.8+1) traits.push(`часто 3-бетит (${F.v3}, по GTO ${F.g3})`);
   if(F.tp>=2&&F.tpf>=2&&F.tpf/F.tp>=.5) traits.push(`часто сдаётся на 3-бет (${F.tpf} из ${F.tp} рук, с которыми по GTO продолжают)`);
-  for(const k in errs) errs[k]=errs[k].sort((a,b)=>b.sev-a.sev).map(e=>e.t);
+  for(const k in errs) errs[k]=errs[k].sort((a,b)=>b.sev-a.sev);
   const ranked=Object.entries(errs).sort((a,b)=>b[1].length-a[1].length);
   // факты об игре этого человека, без общих описаний типа
   const exs=l=>l.sort((a,b)=>b[0]-a[0]).slice(0,3).map(e=>e[1]).join(', ');
@@ -2022,6 +2023,12 @@ function clsDiffs(x,min=.15){ const out=[];
     if(Math.abs(d)>=min) out.push({kk,g,p,d}); }
   return out.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)); }
 const pp=v=>Math.round(v*100)+'%';
+const SITH={'open-EP':'С ранних позиций','open-MP':'С HJ и CO','open-LP':'С баттона','open-SB':'Из SB первым в банк','def-BB':'На BB против рейза','def-SB':'Из SB против рейза','def-IP':'Против рейза в позиции','vs3b':'Против 3-бета'};
+const SITNO={'open-EP':'отсюда их не открывают','open-MP':'отсюда их не открывают','open-LP':'даже с баттона их не открывают','open-SB':'из SB их не открывают','def-BB':'даже BB их сбрасывает','def-SB':'их здесь сбрасывают','def-IP':'их здесь сбрасывают','vs3b':'на 3-бет их сбрасывают'};
+const SITYES={'open-EP':'отсюда их открывают','open-MP':'отсюда их открывают','open-LP':'с баттона их открывают','open-SB':'из SB их открывают','def-BB':'BB их защищает','def-SB':'с ними здесь продолжают','def-IP':'с ними здесь продолжают','vs3b':'с ними против 3-бета продолжают'};
+const CLS_LOW={pair:'мелкие пары',axs:'младшие Ax одномастные',axo:'младшие Ax разномастные',bw:'младшие бродвеи',sc:'младшие одномастные коннекторы',sx:'слабые одномастные',ox:'слабые разномастные'};
+const CLS_HIGH={pair:'средние и старшие пары',axs:'старшие Ax одномастные',axo:'старшие Ax разномастные',bw:'старшие бродвеи',sc:'старшие одномастные коннекторы',sx:'одномастные с картинкой',ox:'разномастные с картинкой'};
+function clsDesc(kk,hands){ const l=CLSH[kk], r=hands.reduce((s,hh)=>s+l.indexOf(hh)/Math.max(1,l.length-1),0)/hands.length; return r>=.45?CLS_LOW[kk]:CLS_HIGH[kk]; }
 function clsLine(o){ const nm=HCLS[o.kk][0].toUpperCase()+HCLS[o.kk].slice(1), k=Math.round(Math.abs(o.d)*100);
   return `${nm}: по GTO играются на ${k}% ${o.d>0?'реже':'чаще'} (GTO ${pp(o.g)} этих рук, у тебя ${pp(o.p)})`; }
 // сайзинг относительно GTO
@@ -2071,11 +2078,15 @@ function profTips(A,run){ const lvl=tipLevel(A), z=A.xy?zoneOf(A.xy):['ok','bal'
     const x=A.rows.find(r=>r.sg===sg);
     for(const [is,l,n,word] of [[loose,e.l,e.lo,'лишние'],[tight,e.t,e.to,'сброшенные']]){ if(!is) continue;
       const byc={}; for(const [,hh] of l){ const k=hcls(hh); byc[k]=(byc[k]||0)+1; } const top=Object.entries(byc).sort((a,b)=>b[1]-a[1]);
-      const ex=[...new Set(l.sort((a,b)=>b[0]-a[0]).map(v=>prettyHand(v[1])))].slice(0,4).join(', ');
-      const cd=x?clsDiffs(x).find(o=>o.kk===top[0][0]&&(word==='лишние'?o.d>0:o.d<0)):null;
-      const head=`${SIT[sg]}: ${word==='лишние'?(soft?'чуть шире GTO':'шире GTO'):(soft?'чуть уже GTO':'уже GTO')}`;
-      WT.push([head,`${word==='лишние'?`Сыграл ${l.length} из ${n} рук, которые GTO здесь сбрасывает`:`Сбросил ${l.length} из ${n} рук, которые GTO здесь играет`}: ${ex}.`+(top[0][1]>=2&&!(top[1]&&top[1][1]===top[0][1])?` Чаще всего это ${HCLS[top[0][0]]}`+(cd?`: по GTO они здесь играются на ${Math.round(Math.abs(cd.d)*100)}% ${cd.d>0?'реже':'чаще'} (GTO ${pp(cd.g)} этих рук, у тебя ${pp(cd.p)}).`:'.'):''),l.length/Math.max(1,n)*(l.length)]); } }
-  T.push(...WT.sort((p,q)=>q[2]-p[2]).map(x=>[x[0],x[1]]));
+      const ls=[...l].sort((a,b)=>b[0]-a[0]), seen=new Set(), links=[]; for(const v of ls){ if(seen.has(v[2])) continue; seen.add(v[2]); links.push({label:prettyHand(v[1]),k:v[2]}); if(links.length>=4) break; }
+      const main=top[0][1]>=2&&!(top[1]&&top[1][1]===top[0][1])?top[0][0]:null, mh=main?l.filter(v=>hcls(v[1])===main).map(v=>v[1]):[];
+      const cd=x&&main?clsDiffs(x).find(o=>o.kk===main&&(word==='лишние'?o.d>0:o.d<0)):null;
+      const lo=word==='лишние', head=`${SITH[sg]}: ${lo?(soft?'чуть лузовее GTO':'слишком лузово'):(soft?'чуть тайтовее GTO':'слишком тайтово')}`;
+      const eg=[...new Set((main?ls.filter(v=>hcls(v[1])===main):ls).map(v=>prettyHand(v[1])))].slice(0,3).join(', ');
+      const what=main?`Ты ${lo?'играешь':'сбрасываешь'} ${clsDesc(main,mh)} (например, ${eg}), а по GTO ${lo?SITNO[sg]:SITYES[sg]}.`
+        :`Ты ${lo?'играешь':'сбрасываешь'} руки вроде ${eg}, а по GTO ${lo?SITNO[sg]:SITYES[sg]}.`;
+      WT.push([head,`${what} Так было в ${l.length} из ${n} таких раздач.`+(cd?` Из этих рук по GTO стоит играть примерно ${pp(cd.g)}, а ты играешь ${pp(cd.p)}.`:''),l.length/Math.max(1,n)*(l.length),links]); } }
+  T.push(...WT.sort((p,q)=>q[2]-p[2]).map(x=>[x[0],x[1],x[3]]));
   // как подстраиваться: GTO — старт, отклонение — только от явного лика соперника
   const W=[];
   W.push('GTO — стартовая точка. Отходи от неё, когда видишь у соперника явный перекос, и возвращайся к базе, когда информации нет.');
@@ -2131,15 +2142,21 @@ function renderResults(){ syncRun();
   if(extra.length){ const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Сайзинг по сравнению с GTO</b>'; const ul=document.createElement('ul'); ul.className='tips';
     for(const t of extra){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul); }
   const sum=document.createElement('p'); sum.style.margin='0'; sum.innerHTML='<b>Советы</b> <span class="hint"></span>'; sum.lastChild.textContent=TP.intro; v.appendChild(sum);
-  const top=A.ranked.filter(([k])=>k!=='other'), ex={}; for(const [k,l] of top) ex[k]=l.slice(0,3).join(', ');
+  const top=A.ranked.filter(([k])=>k!=='other');
+  // ссылки «раздача N»: открывают разбор этой раздачи в списке ниже и прокручивают к нему
+  const HR=[]; const openHand=k=>{ const r=HR[k]; if(!r) return; if(r.row.getAttribute('aria-expanded')!=='true') r.row.click(); try{ r.row.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} r.row.classList.add('flash'); setTimeout(()=>r.row.classList.remove('flash'),1600); };
+  const addLinks=(li,links)=>{ if(!links||!links.length) return; const w=document.createElement('span'); w.className='hlinks'; w.append(' Посмотреть: ');
+    links.forEach((o,i)=>{ const a=document.createElement('button'); a.type='button'; a.className='hlink'; a.textContent=`№${o.k+1} ${o.label}`; a.onclick=()=>openHand(o.k); w.append(a); if(i<links.length-1) w.append(' '); }); li.appendChild(w); };
   if(TP.tips.length){ const ul=document.createElement('ul'); ul.className='tips';
-    for(const [b,t] of TP.tips){ const li=document.createElement('li'); li.innerHTML='<b></b> <span></span>'; li.children[0].textContent=b+'.'; li.children[1].textContent=t; ul.appendChild(li); }
+    for(const [b,t,links] of TP.tips){ const li=document.createElement('li'); li.innerHTML='<b></b> <span></span>'; li.children[0].textContent=b+'.'; li.children[1].textContent=t; addLinks(li,links); ul.appendChild(li); }
     v.appendChild(ul); }
   else if(top.length){ const ul=document.createElement('ul'); ul.className='tips';
-    for(const [k,l] of top.slice(0,3)){ const li=document.createElement('li'); li.innerHTML='<b></b> <span></span> <span class="hint"></span>'; li.children[0].textContent=ERR_TXT[k][0]+'.'; li.children[1].textContent=ERR_TXT[k][1]; li.children[2].textContent='Примеры: '+l.slice(0,3).join(', ')+'.'; ul.appendChild(li); }
+    for(const [k,l] of top.slice(0,3)){ const li=document.createElement('li'); li.innerHTML='<b></b> <span></span>'; li.children[0].textContent=ERR_TXT[k][0]+'.'; li.children[1].textContent=ERR_TXT[k][1]; const seen=new Set(); addLinks(li,l.filter(e=>!seen.has(e.k)&&seen.add(e.k)).slice(0,3).map(e=>({label:e.t,k:e.k}))); ul.appendChild(li); }
     v.appendChild(ul); }
   else { const p0=document.createElement('p'); p0.style.margin='0'; p0.textContent='Ошибок нет: все решения совпали с GTO.'; v.appendChild(p0); }
-  if(top.length&&TP.tips.length){ const p1=document.createElement('p'); p1.className='hint'; p1.style.margin='0'; p1.textContent='Примеры ошибок: '+top.slice(0,3).map(([k])=>`${ERR_TXT[k][0].toLowerCase()} — ${ex[k]}`).join('; ')+'.'; v.appendChild(p1); }
+  if(top.length&&TP.tips.length){ const p1=document.createElement('p'); p1.className='hint'; p1.style.margin='0'; p1.textContent='Ошибки по типам:';
+    const ul=document.createElement('ul'); ul.className='tips'; for(const [k,l] of top.slice(0,3)){ const li=document.createElement('li'); li.textContent=ERR_TXT[k][0]+'.'; const seen=new Set();
+      addLinks(li,l.filter(e=>!seen.has(e.k)&&seen.add(e.k)).slice(0,4).map(e=>({label:e.t,k:e.k}))); ul.appendChild(li); } v.append(p1,ul); }
   { const h3=document.createElement('p'); h3.style.margin='0'; h3.innerHTML='<b>Против кого как играть</b>'; const ul=document.createElement('ul'); ul.className='tips';
     for(const t of TP.adapt){ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); } v.append(h3,ul); }
   // таблица раздач
@@ -2154,7 +2171,7 @@ function renderResults(){ syncRun();
     row.onclick=()=>{ const open=row.getAttribute('aria-expanded')==='true';
       list.querySelectorAll('.hrow').forEach(r=>r.setAttribute('aria-expanded','false')); list.querySelectorAll('.hdet').forEach(d=>d.hidden=true);
       if(!open){ if(!det.firstChild) ds.forEach((x,i)=>det.appendChild(decBlock(x,i))); det.hidden=false; row.setAttribute('aria-expanded','true'); } };
-    list.append(row,det); });
+    HR[k]={row,det}; list.append(row,det); });
   const lh=document.createElement('p'); lh.className='hint'; lh.style.margin='0'; lh.textContent='Раздачи. Нажми на строку, чтобы открыть разбор.';
   v.append(lh,list);
   const nb=document.createElement('button'); nb.className='next'; nb.id='newprof'; nb.textContent='Новый профиль'; nb.onclick=()=>{ RUN=null; RS=null; idle(); };
