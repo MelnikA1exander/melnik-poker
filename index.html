@@ -410,7 +410,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
       <label class="sizesel" for="rng-act"><select id="rng-act" aria-label="Действие"><option value="open" selected>Open</option><option value="vs">Raise/Call</option></select></label>
       <label class="sizesel" for="rng-op" id="rng-opw" hidden><select id="rng-op" aria-label="Опен с позиции"></select></label>
     </div>
-    <p class="rnghint" id="rng-hint">GTO-диапазоны опена первым в банк: стеки 125 ББ, без рейка и анте. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.</p>
+    <p class="rnghint" id="rng-hint">GTO-диапазоны опена первым в банк: стеки 100 ББ, без рейка и анте. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.</p>
     <div class="rnglist" id="rng-list"></div>
     <div class="anyrng" id="anyrng" hidden>
       <div class="anyhead"><output id="any-out"></output><button type="button" class="anystep" id="any-m" aria-label="Меньше">−</button><input type="range" id="any-sl" min="0" max="100" step="0.5" value="15" aria-label="Процент лучших рук"><button type="button" class="anystep" id="any-p" aria-label="Больше">+</button></div>
@@ -576,7 +576,9 @@ const WIDE=RFI[0]; // «правдоподобные» руки для отбо�
 
 // ===================== table / positions =====================
 const LABELS={8:['UTG','UTG+1','LJ','HJ','CO','BTN','SB','BB'],9:['UTG','UTG+1','UTG+2','LJ','HJ','CO','BTN','SB','BB'],10:['UTG','UTG+1','UTG+2','MP','LJ','HJ','CO','BTN','SB','BB']};
-const STACK=500, BB=4, SBA=2;
+// стек: в GTO-режимах 100 ББ (400) — под солверные чарты, в индивидуальном — 125 ББ (500), как в домашней игре
+let STACK=400; const BB=4, SBA=2;
+const stackFor=()=>MODE==='ind'?500:400;
 let N=9;
 const lab=i=>LABELS[N][i];
 const btnIdx=()=>N-3;
@@ -631,7 +633,7 @@ function heroSeat(){
   const ok=i=> filter==='all' || (filter==='BL'? (isSB(i)||isBB(i)) : !isSB(i)&&!isBB(i) && (filter==='EP'?dist(i)>=4:filter==='MP'?dist(i)>=2&&dist(i)<=3:dist(i)<=1));
   const c=[]; for(let i=0;i<N;i++) if(ok(i)) c.push(i); return c[rnd(c.length)];
 }
-function setupHand(){
+function setupHand(){ STACK=stackFor();
   const deck=SMAP?shuffled().map(c=>c[0]+SMAP[c[1]]):shuffled(); const players=[]; // SMAP: повтор раздачи с другими мастями
   for(let i=0;i<N;i++){ const cards=[deck.pop(),deck.pop()]; players.push({i,cards,h:hclass(cards),bet:0,folded:false,allin:false,tag:''}); }
   players[N-2].bet=SBA; players[N-1].bet=BB;
@@ -673,7 +675,7 @@ function sizeBands(d){
     const f=x=>x*P+c*P; return {best:b.map(f),ok:k.map(f),txt:`${d.ip?'×3–3,5 в позиции':'×4–4,5 без позиции'}${c?' + опен за каждого коллера':''} (${ev(f(b[0]))}–${ev(f(b[1]))})`}; }
   if(d.kind==='vs3b'||d.kind==='cold3b'){ const b=d.ip?[2.2,2.8]:[2.5,3.2], k=d.ip?[2.0,3.2]:[2.2,3.6];
     return {best:b.map(x=>Math.min(STACK,x*P)),ok:k.map(x=>Math.min(STACK,x*P)),txt:`${d.ip?'×2,2–2,8 в позиции':'×2,5–3,2 без позиции'} (${ev(b[0]*P)}–${ev(Math.min(STACK,b[1]*P))})`}; }
-  return {best:[STACK*.8,STACK],ok:[Math.min(STACK,2.2*P),STACK],txt:'олл-ин (500)'};
+  return {best:[STACK*.8,STACK],ok:[Math.min(STACK,2.2*P),STACK],txt:`олл-ин (${STACK})`};
 }
 function botSize(d){ const b=sizeBands(d).best; let s=ev((b[0]+b[1])/2); if(d.kind==='open'&&!isSB(d.p)) s=H.openPref+d.callers*4; if(s>=STACK*.4) s=STACK; return Math.max(d.minTo,Math.min(STACK,s)); }
 function apply(h,p,a,amt){
@@ -1084,9 +1086,9 @@ function explainBase(x){
   }
   if(d.kind==='vs3b') return `${pre} После опена с ${grpName[grp(d.p)]||'SB'} против 3-бета ${d.ip?'в позиции':'без позиции'} ≈ ${r}% рук идут в 4-бет и ≈ ${cc}% в колл. ${d.ip?'Позиция позволяет коллировать шире.':'Без позиции колл-диапазон уже.'}`;
   if(d.kind==='cold3b') return `${pre} Перед тобой опен и 3-бет: оба диапазона сильные, продолжаем узко: ≈ ${r}% рук в 4-бет и ≈ ${cc}% в колл.`;
-  if(d.kind==='vs4b') return `${pre} Против 4-бета при 125 ББ продолжаем узко: ≈ ${r}% рук в олл-ин и ≈ ${cc}% в колл, остальное фолд.`;
+  if(d.kind==='vs4b') return `${pre} Против 4-бета при ${STACK/BB} ББ продолжаем узко: ≈ ${r}% рук в олл-ин и ≈ ${cc}% в колл, остальное фолд.`;
   if(d.kind==='cold4b') return `${pre} Перед тобой 3-бет и 4-бет: продолжаем только самыми сильными руками, ≈ ${r+cc}% рук.`;
-  return `${pre} Против олл-ина на 125 ББ коллируем, когда эквити против диапазона пуша выше ~39% (столько требуют шансы банка): ≈ ${cc}% рук.`;
+  return `${pre} Против олл-ина на ${STACK/BB} ББ коллируем, когда эквити против диапазона пуша выше ~39% (столько требуют шансы банка): ≈ ${cc}% рук.`;
 }
 // ---- «почему»: объяснение ошибки через эквити, кражу блайндов и доминацию ----
 function chW(ch,mode){ const w={}; for(const hh of ALL169){ const c=cls(ch,hh); if(c==='F') continue; const fv=ch.f&&ch.f[hh];
@@ -2150,8 +2152,8 @@ function gtoSizing(run){ const G={open:[],vsopen:[],vs3b:[]}, out=[];
   for(const [ip,nm,gto] of [[true,'в позиции','×3 от опена'],[false,'без позиции','×4–4,5 от опена']]){ const l=G.vsopen.filter(x=>x.ip===ip); if(!l.length) continue;
     out.push(`3-бет ${nm}: обычно ×${fx(med(l.map(x=>x.v)))}, в GTO ${gto}${ip?'':' (без позиции размер компенсирует неудобство)'}. `+verdict(l,'Лишний размер раздувает банк, когда тебя коллируют только руки, которые тебя опережают.','Мелкий 3-бет даёт опенеру выгодный колл в позиции почти любой рукой.')); }
   for(const [ip,nm,gto] of [[true,'в позиции','×2,2–2,5 от 3-бета'],[false,'без позиции','×2,5–3 от 3-бета']]){ const l=G.vs3b.filter(x=>x.ip===ip&&!x.allin); if(!l.length) continue;
-    out.push(`4-бет ${nm}: обычно ×${fx(med(l.map(x=>x.v)))}, в GTO ${gto}. `+verdict(l,'При 125 ББ 4-бет крупнее ×3 почти коммитит стек: тогда честнее сразу олл-ин с узким диапазоном.','Слишком мелкий 4-бет даёт 3-беттору дешёвый колл и пятый бет.')); }
-  const J=G.vs3b.filter(x=>x.allin); if(J.length) out.push(`4-бет олл-ин: ${J.length} раз. При 125 ББ GTO почти не пушит на 4-бет, а ставит ×2,2–3 и уже на 5-бет идёт олл-ин; пуш сразу отдаёт сопернику простое решение.`);
+    out.push(`4-бет ${nm}: обычно ×${fx(med(l.map(x=>x.v)))}, в GTO ${gto}. `+verdict(l,`При ${STACK/BB} ББ 4-бет крупнее ×3 почти коммитит стек: тогда честнее сразу олл-ин с узким диапазоном.`,'Слишком мелкий 4-бет даёт 3-беттору дешёвый колл и пятый бет.')); }
+  const J=G.vs3b.filter(x=>x.allin); if(J.length) out.push(`4-бет олл-ин: ${J.length} раз. При ${STACK/BB} ББ GTO почти не пушит на 4-бет, а ставит ×2,2–3 и уже на 5-бет идёт олл-ин; пуш сразу отдаёт сопернику простое решение.`);
   const same=out.filter(t=>/Размер как в GTO\.$/.test(t)), rest=out.filter(t=>!/Размер как в GTO\.$/.test(t));
   if(same.length) rest.push('Как в GTO: '+same.map(t=>{ const m=t.match(/^([^:]+): обычно ([^,]+(?:,\d+)?)/); return m?`${lc1(m[1])} (${m[2].replace(/\s*\(.*$/,'')})`:lc1(t.split(':')[0]); }).join(', ')+'.');
   return rest; }
@@ -2503,7 +2505,7 @@ function renderRanges(){ const box=$('#rng-list'); box.innerHTML='';
   $('#rng-opw').hidden=!vs;
   if(vs){ const cur=op.value; op.innerHTML=''; for(let i=0;i<n-1;i++){ const o=document.createElement('option'); o.value=i; o.textContent='Опен '+L[i]; op.appendChild(o); }
     op.value=[...op.options].some(o=>o.value===cur)?cur:'0'; }
-  $('#rng-hint').textContent=vs?'Ответ на опен первым в банк: 3-бет, колл или фолд для каждой позиции после опенера. Под рукой у миксов — частота: % — как часто играется действие своего цвета, 60/40 — 3-бет/колл.':'GTO-диапазоны опена первым в банк: стеки 125 ББ, без рейка и анте. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.';
+  $('#rng-hint').textContent=vs?'Ответ на опен первым в банк: 3-бет, колл или фолд для каждой позиции после опенера. Под рукой у миксов — частота: % — как часто играется действие своего цвета, 60/40 — 3-бет/колл.':'GTO-диапазоны опена первым в банк: стеки 100 ББ, без рейка и анте. Разверни позицию, чтобы увидеть таблицу рук. У пограничных рук под названием — как часто солвер их открывает.';
   for(const {pos,ch} of vs?rngVs(n,+op.value):rngCharts(n,'open')){
     const b=document.createElement('button'); b.type='button'; b.className='rrow'; b.setAttribute('aria-expanded','false');
     b.innerHTML=`<b></b><span class="pct">${vs?`3-бет ≈ ${rangePct(ch,['R'])}% · колл ≈ ${rangePct(ch,['C'])}%`:`≈ ${rngPct(ch)}% рук в опен`}</span><span class="chev">▾</span>`; b.querySelector('b').textContent=pos;
