@@ -102,17 +102,18 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 
 /* ---- actions ---- */
 #panel{display:grid;gap:8px}
-.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:72px;gap:8px}
 .act{font:700 15px var(--f-body);border:0;border-radius:12px;padding:14px 6px;cursor:pointer;color:#fff;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:56px;justify-content:center}
-.act small{font:500 11px var(--f-mono);opacity:.85}
+.act small{font:500 11px var(--f-mono);opacity:.85;white-space:pre;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.25;text-align:center}
+.act{min-width:0}
 .act.fold{background:#6B7570}.act.check{background:#4F6B8A}.act.call{background:var(--call)}.act.raise{background:var(--raise)}
 .act:disabled{opacity:.3;cursor:not-allowed}
 .act[aria-expanded="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--raise) 40%,transparent)}
 .kbd{font:500 10px var(--f-mono);opacity:.6}
 .raisebox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:10px}
-.presets{display:flex;flex-wrap:wrap;gap:6px}
-.presets button{font:600 13px var(--f-body);border:1px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:9px;padding:7px 10px;cursor:pointer}
-.presets button small{font:500 11px var(--f-mono);color:var(--muted);margin-left:4px}
+.presets{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px}
+.presets button{font:600 14px var(--f-body);border:1px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:10px;padding:10px 4px;min-height:48px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:0;white-space:nowrap}
+.presets button small{font:500 11px var(--f-mono);color:var(--muted)}
 .amount{display:flex;gap:8px;align-items:center}
 .amtlbl{font:600 14px var(--f-body);margin-right:auto;white-space:nowrap}
 #slider{-webkit-appearance:none;appearance:none;width:100%;height:44px;margin:2px 0;background:transparent;cursor:pointer;touch-action:none;--fill:0%}
@@ -156,6 +157,10 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .prog i b{display:block;height:100%;background:#fff}
 /* ---- help ---- */
 .hdr-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.iconbtn{width:34px;height:30px;flex-shrink:0;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 15px var(--f-body);cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.iconbtn[aria-pressed="true"]{background:var(--sunk);color:var(--ink);border-color:var(--ink)}
+#musbtn[aria-pressed="false"],#sndbtn[aria-pressed="false"]{opacity:.55}
+@media (max-width:520px){.hdr-r{gap:6px}.hdr-r .helpbtn{font-size:12px;padding:5px 9px}.iconbtn{width:30px;height:28px;font-size:14px}}
 .helpbtn{font:600 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
 .help h3{font:700 13px var(--f-display);margin:6px 0 0}
 .help p,.help li{margin:0;max-width:62ch;font-size:14px}
@@ -291,7 +296,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
   .seat{width:60px}.seat .pod{min-width:52px;padding:2px 4px}.seat .pos{font-size:10px}.seat .stk{font-size:10px}
   .pc{width:30px;height:42px;font-size:13px}.pc i{font-size:12px}
   .pc.big{width:38px;height:53px;font-size:16px}.pc.big i{font-size:15px}
-  .act{font-size:14px;padding:12px 4px}
+  .act{font-size:14px;padding:8px 4px}
   .kbd{display:none}
 }
 @media (prefers-reduced-motion:no-preference){.verdict{animation:rise .2s ease-out}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
@@ -385,7 +390,7 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 <div class="wrap" id="app" hidden>
   <header>
     <h1>Melnik Poker</h1>
-    <div class="hdr-r"><button class="themesw" id="theme" type="button" role="switch"><i class="sw-ic sw-sun"></i><i class="sw-ic sw-moon"></i><b class="sw-knob"></b></button><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
+    <div class="hdr-r"><button class="themesw" id="theme" type="button" role="switch"><i class="sw-ic sw-sun"></i><i class="sw-ic sw-moon"></i><b class="sw-knob"></b></button><button class="iconbtn" id="musbtn" type="button" aria-pressed="false" aria-label="Музыка" title="Музыка">♪</button><button class="iconbtn" id="sndbtn" type="button" aria-pressed="true" aria-label="Звуки игры" title="Звуки игры">🔊</button><audio id="bgm" src="music.m4a" loop preload="none"></audio><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
   </header>
 
   <div class="modesrow">
@@ -914,7 +919,7 @@ function idlePanel(){
 }
 function idleBox(){
   const box=document.createElement('div'); box.className='raisebox'; box.style.opacity='.5'; box.style.pointerEvents='none';
-  box.innerHTML='<div class="amount"><label class="amtlbl">Рейз до</label><button class="step" disabled>−</button><input type="number" disabled aria-label="Размер рейза"><button class="step" disabled>+</button></div><input type="range" id="slider" disabled min="0" max="1000" value="0" aria-label="Размер рейза, ползунок"><div class="slscale"><span>&nbsp;</span><span>&nbsp;</span></div><div class="presets"><button disabled>&nbsp;<small>&nbsp;</small></button><button disabled>&nbsp;<small>&nbsp;</small></button><button disabled>&nbsp;<small>&nbsp;</small></button><button disabled>&nbsp;<small>&nbsp;</small></button></div>';
+  box.innerHTML='<div class="amount"><label class="amtlbl">Рейз до</label><button class="step" disabled>−</button><input type="number" disabled aria-label="Размер рейза"><button class="step" disabled>+</button></div><div class="presets"><button disabled>&nbsp;<small>&nbsp;</small></button><button disabled>&nbsp;<small>&nbsp;</small></button><button disabled>&nbsp;<small>&nbsp;</small></button><button disabled>&nbsp;<small>&nbsp;</small></button></div><input type="range" id="slider" disabled min="0" max="1000" value="0" aria-label="Размер рейза, ползунок"><div class="slscale"><span>&nbsp;</span><span>&nbsp;</span></div>';
   return box;
 }
 function play(){
@@ -924,11 +929,40 @@ function play(){
   const step=()=>{ if(k>=fr.length-1){ ANIM=null; render(); return; } renderTable(view(fr[k++])); ANIM=setTimeout(step,500); };
   step();
 }
+// ===================== звуки =====================
+// синтез через Web Audio, без файлов: фишки при ставке/колле, шорох карт при фолде, короткий сигнал на твой ход
+const SND={on:(()=>{ try{ return localStorage.getItem('pc-sound')!=='off'; }catch(e){ return true; } })(),ctx:null,hand:null,n:0,turn:null};
+function sndCtx(){ if(!SND.on) return null; try{ if(!SND.ctx){ const A=window.AudioContext||window.webkitAudioContext; if(!A) return null; SND.ctx=new A(); }
+  if(SND.ctx.state==='suspended') SND.ctx.resume(); return SND.ctx; }catch(e){ return null; } }
+document.addEventListener('pointerdown',()=>{ if(SND.on) sndCtx(); },{passive:true}); // браузеры дают звук только после касания
+function sndNoise(c,dur){ const b=c.createBuffer(1,Math.ceil(c.sampleRate*dur),c.sampleRate), d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; const s=c.createBufferSource(); s.buffer=b; return s; }
+function sndChips(){ const c=sndCtx(); if(!c) return; const t0=c.currentTime;
+  for(let i=0;i<3;i++){ const t=t0+i*.045+Math.random()*.01, o=c.createOscillator(), g=c.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(3200+Math.random()*900,t); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.12,t+.003); g.gain.exponentialRampToValueAtTime(.0001,t+.06);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t+.07);
+    const n=sndNoise(c,.03), f=c.createBiquadFilter(), ng=c.createGain(); f.type='highpass'; f.frequency.value=5000; ng.gain.setValueAtTime(.06,t); ng.gain.exponentialRampToValueAtTime(.0001,t+.03);
+    n.connect(f).connect(ng).connect(c.destination); n.start(t); } }
+function sndFold(){ const c=sndCtx(); if(!c) return; const t=c.currentTime, n=sndNoise(c,.18), f=c.createBiquadFilter(), g=c.createGain();
+  f.type='bandpass'; f.Q.value=.8; f.frequency.setValueAtTime(2600,t); f.frequency.exponentialRampToValueAtTime(700,t+.16);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.14,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+.17);
+  n.connect(f).connect(g).connect(c.destination); n.start(t); }
+function sndTurn(){ const c=sndCtx(); if(!c) return; const t0=c.currentTime;
+  [[660,0],[880,.09]].forEach(([fq,dt])=>{ const t=t0+dt, o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=fq;
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.09,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+.22);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t+.24); }); }
+// новые записи в журнале раздачи → звук (по одному звуку каждого вида за кадр)
+function sndLog(h){ const root=h.anim?Object.getPrototypeOf(h):h, L=h.log.length;
+  if(SND.hand!==root){ SND.hand=root; SND.n=root.over?L:0; SND.turn=null; }
+  if(L<=SND.n){ SND.n=Math.min(SND.n,L); return; }
+  const fresh=h.log.slice(SND.n); SND.n=L;
+  if(fresh.some(e=>e.a==='F')) sndFold();
+  if(fresh.some(e=>e.a==='C'||e.a==='R')) setTimeout(sndChips,fresh.some(e=>e.a==='F')?90:0); }
+function sndHeroTurn(h){ const k=h.street+':'+h.log.length; if(SND.hand===h&&SND.turn===k) return; SND.turn=k; sndTurn(); }
 // ===================== rendering =====================
 function seatXY(k){ const ang=Math.PI/2+k*2*Math.PI/N; const rx=window.innerWidth<520?38:44; return [50+rx*Math.cos(ang),50+41*Math.sin(ang)]; }
 function render(){ renderTable(); if(H.over) renderEnd(); else renderActions(); }
 function renderTable(h=H){
-  const t=$('#table'); t.innerHTML='';
+  const t=$('#table'); t.innerHTML=''; try{ sndLog(h); }catch(e){}
   const lastA=h.log.length?h.log[h.log.length-1].p:null;
   const rail=document.createElement('div'); rail.className='rail';
   const felt=document.createElement('div'); felt.className='felt';
@@ -982,7 +1016,7 @@ function curDec(h){
   const d=heroDec(h); d.maxTo=STACK; d.allinCall=h.curBet>=STACK; return d;
 }
 function renderActions(){
-  const h=H, d=curDec(h), p=$('#panel'); p.innerHTML='';
+  const h=H, d=curDec(h), p=$('#panel'); p.innerHTML=''; try{ sndHeroTurn(h); }catch(e){}
   const row=document.createElement('div'); row.className='actions';
   const rname=d.post?(d.curBet>0?'Рейз':'Ставка'):cap(RAISE_NAME[d.kind]);
   const mk=(id,cls,label,sub,dis,fn,key)=>{ const b=document.createElement('button'); b.id=id; b.className='act '+cls; b.disabled=dis;
@@ -1003,7 +1037,7 @@ function renderActions(){
     const sl=document.createElement('input'); sl.type='range'; sl.id='slider'; sl.min=0; sl.max=1000; sl.step=1; sl.setAttribute('aria-label','Размер рейза, ползунок');
     const hint=document.createElement('div'); hint.className='hint'; hint.textContent=`Сумма всей ставки. Минимум ${d.minTo}, максимум ${STACK} (олл-ин).`;
     const sc=document.createElement('div'); sc.className='slscale'; sc.innerHTML=`<span>${d.minTo}</span><span>олл-ин ${d.maxTo}</span>`;
-    box.append(am,sl,sc,pr); p.appendChild(box);
+    box.append(am,pr,sl,sc); p.appendChild(box);
     const inp=$('#amt');
     sl.oninput=()=>{ const t=+sl.value/1000; let v=d.minTo+(d.maxTo-d.minTo)*t*t; v=t>=1?d.maxTo:Math.round(v/2)*2; setAmt(v,false,true); };
     inp.oninput=()=>{ const v=+inp.value; setAmt(v,true); };
@@ -1016,7 +1050,7 @@ function setAmt(v,typing,fromSlider){
   const d=curDec(H), MX=d.maxTo; v=Math.round(v||0); if(!typing) v=Math.max(d.minTo,Math.min(MX,v));
   amount=v; const sl=$('#slider'), inp=$('#amt'), rb=$('#a-raise');
   if(sl){ const c=Math.max(d.minTo,Math.min(MX,v)), t=Math.sqrt((c-d.minTo)/Math.max(1,MX-d.minTo)); if(!fromSlider) sl.value=Math.round(t*1000); sl.style.setProperty('--fill',(fromSlider?+sl.value/10:t*100)+'%'); } if(inp&&!typing) inp.value=v;
-  const ok=v>=d.minTo&&v<=MX; if(rb){ rb.disabled=!ok; rb.querySelector('small').textContent= ok?(v>=MX?'олл-ин':d.post?(d.curBet?`до ${v}`:`${v} · ${Math.round(v/d.pot*100)}% банка`):`до ${v} · ${bbs(v)} ББ`):`от ${d.minTo}`; }
+  const ok=v>=d.minTo&&v<=MX; if(rb){ rb.disabled=!ok; rb.querySelector('small').textContent= ok?(v>=MX?`${v}\nолл-ин`:d.post?(d.curBet?`до ${v}\n${bbs(v)} ББ`:`${v}\n${Math.round(v/d.pot*100)}% банка`):`до ${v}\n${bbs(v)} ББ`):`от ${d.minTo}\n `; } // всегда две строки: кнопка не меняет размер
 }
 
 // ===================== review =====================
@@ -1744,7 +1778,7 @@ function recDecision(h,d,a,amt){
   RS.dec.push({t:Date.now(),m:REC?'rec':MODE,g:GAME,N,pos:lab(h.hero),d:isSB(h.hero)?-1:isBB(h.hero)?-2:dist(h.hero),
     h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,lim:d.level===0?h.callers:null,
     open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,callers:d.level>=1?h.callers:null,
-    cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,ok:h.decisions[h.decisions.length-1].al,n:RUN.hands.length+1,s:sitOf(h,{d}),rep:h.rep||null,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
+    cur:h.curBet,toCall:d.toCall,kw:h.keepW||1,pr:h.probe||null,cats:h.cats||null,gr:h.decisions[h.decisions.length-1].g,ok:h.decisions[h.decisions.length-1].al,dw:(()=>{ try{ return diffW(decDiff(h.decisions[h.decisions.length-1])); }catch(e){ return null; } })(),n:RUN.hands.length+1,s:sitOf(h,{d}),rep:h.rep||null,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,ctx:contextText(h)});
   RS.updated=Date.now(); if(AUTH) persist(RS); } // сохраняем после каждого решения: раздачи попадают в профиль, даже если тест не доигран
 // личный журнал «Префлопа»: пишется в отдельный лист базы после каждого решения; в профиле идёт в раздачи и точность
 let PS=null; const PS_MAX=200, PS_GAP=30*60*1000;
@@ -1754,7 +1788,7 @@ function pfDecision(h,d,a,amt){
   const x=h.decisions[h.decisions.length-1], o=d.level>=1?h.raisers[0]:null;
   if(h.hn==null) h.hn=now; // номер раздачи: сервер по нему считает раздачи
   PS.dec.push({t:now,hn:h.hn,m:MODE,N,pos:lab(h.hero),h:h.players[h.hero].h,c:h.players[h.hero].cards.join(''),k:d.kind,lv:d.level,
-    open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,toCall:d.toCall,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,g:x.g,ok:x.al});
+    open:o!=null?h.log.find(e=>e.p===o&&e.a==='R').amt:null,opos:o!=null?lab(o):null,toCall:d.toCall,a,amt:a==='R'?Math.min(STACK,Math.round(amt)):0,g:x.g,ok:x.al,dw:(()=>{ try{ return diffW(decDiff(x)); }catch(e){ return null; } })()});
   PS.updated=now; persist(PS); }
 let dbBusy=false; const dbQ=new Map();
 async function persist(rs){ dbQ.set(rs.id,rs); if(dbBusy) return; dbBusy=true;
@@ -1846,19 +1880,23 @@ function repStats(run){ const out=[]; run.hands.forEach((h,i)=>{ if(h.rep==null)
   out.push({h:a.h,pos:a.pos,same:a.a===b.a,a1:b.a==='R'?RAISE_NAME[b.d.kind]:actWord(b.a,b.d),a2:a.a==='R'?RAISE_NAME[a.d.kind]:actWord(a.a,a.d),n1:h.rep,n2:i+1}); }); return out; }
 // соответствие GTO с учётом сложности: у решения сложность тем выше, чем ближе рука к границе GTO;
 // балл — взвешенная доля верных решений: сложные весят 2, средние 1, лёгкие 0,5
+// сложность решения: −2,5 (рука далеко от границы GTO) … +2 (на границе или микс)
+function decDiff(x){ const pos=HPOS[x.h];
+  const qp=widthOf(x.d.ch,['R','C','RC','RF','CF']), qr=widthOf(x.d.ch,['R','RC','RF']);
+  const played=x.a==='C'||x.a==='R', gPlay=x.al.some(a=>a==='C'||a==='R');
+  const dist= played&&gPlay ? Math.min(Math.abs(pos-qr),Math.abs(pos-qp)) : Math.abs(pos-qp);
+  const close=x.al.length>1?1:1-Math.min(1,dist/.12); return -2.5+4.5*close; }
+// вес решения в балле GTO: сложные 2, средние 1, лёгкие 0,5 (так же считает сервер по полю dw)
+const diffW=b=>b<-1?.5:b>.5?2:1;
 function irtScore(run){ const items=[];
-  for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue; const pos=HPOS[x.h];
-    const qp=widthOf(x.d.ch,['R','C','RC','RF','CF']), qr=widthOf(x.d.ch,['R','RC','RF']);
-    const played=x.a==='C'||x.a==='R', gPlay=x.al.some(a=>a==='C'||a==='R');
-    const dist= played&&gPlay ? Math.min(Math.abs(pos-qr),Math.abs(pos-qp)) : Math.abs(pos-qp);
-    const close=x.al.length>1?1:1-Math.min(1,dist/.12);
-    items.push({b:-2.5+4.5*close,y:x.g===2?1:x.g===1?.75:0}); }
+  for(const h of run.hands) for(const x of h.decisions){ if(x.post) continue;
+    items.push({b:decDiff(x),y:x.g===2?1:x.g===1?.75:0}); }
   if(!items.length) return null;
   const sig=z=>1/(1+Math.exp(-z)); let th=0,bl=-1e18;
   for(let t=-6;t<=8;t+=.02){ let ll=-t*t/(2*2*2); for(const it of items){ const p=Math.min(.999,Math.max(.001,sig(t-it.b))); ll+=it.y*Math.log(p)+(1-it.y)*Math.log(1-p); } if(ll>bl){ bl=ll; th=t; } }
   let sc=0; const B=[]; for(let i=0;i<10;i++) B.push(-2.5+4.5*i/9); for(const b of B) sc+=sig(th-b); sc/=B.length;
   const easy=items.filter(i=>i.b<-1), hard=items.filter(i=>i.b>.5);
-  { const w=i=>i.b<-1?.5:i.b>.5?2:1; let W=0,Y=0; for(const i of items){ W+=w(i); Y+=w(i)*i.y; } sc=Y/W; }
+  { const w=i=>diffW(i.b); let W=0,Y=0; for(const i of items){ W+=w(i); Y+=w(i)*i.y; } sc=Y/W; }
   return {score:sc*100,theta:th,n:items.length,easyMiss:easy.filter(i=>i.y===0).length,easyN:easy.length,hardHit:hard.filter(i=>i.y>0).length,hardN:hard.length}; }
 // тип игрока по отклонениям D, ширине V/Vg и агрессии P/V; acc — доля верных решений, %
 // координаты стиля: X — насколько шире (+) или уже (−) GTO игрок входит в банк (по границам диапазонов, ±1 — в 2,8 раза);
@@ -1892,7 +1930,7 @@ function xyType(xy,mixed,acc){ const [w,st]=zoneOf(xy), W=mixed||xy.incons?'mixe
 // график стиля: точка, когда погрешность мала (2σ ≤ 0,1 по обеим осям), иначе область 95%; locked — заглушка для нового аккаунта
 const XY_MIN=50;
 const CHIP_SVG='<svg class="chipspin" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#C9502F"/><g stroke="#fff" stroke-width="7" fill="none" stroke-dasharray="9.7 14.65" transform="rotate(-11 32 32)"><circle cx="32" cy="32" r="27.5"/></g><circle cx="32" cy="32" r="20" fill="#1C5A43" stroke="#fff" stroke-width="2"/><path d="M21 43V22h4.2L32 32.5 38.8 22H43v21h-4.6V30.2L32 40l-6.4-9.8V43z" fill="#fff"/></svg>';
-function xyPlot(xy,locked,n,sz,loading){ const S=300, m=S/2, k=(S/2-18), X=v=>m+v*k, Y=v=>m-v*k;
+function xyPlot(xy,locked,n,sz,loading,brief){ const S=300, m=S/2, k=(S/2-18), X=v=>m+v*k, Y=v=>m-v*k;
   const w=document.createElement('div'); w.className='xyplot'+(locked?' locked':'');
   const zl=[[-.32,'v'],[.3,'v'],[.66,'v'],[-.3,'h']].map(([v,o])=>o==='v'?`<line x1="${X(v)}" y1="${Y(1)}" x2="${X(v)}" y2="${Y(-1)}"/>`:`<line x1="${X(-1)}" y1="${Y(v)}" x2="${X(1)}" y2="${Y(v)}"/>`).join('')+`<line x1="${X(-.32)}" y1="${Y(.3)}" x2="${X(1)}" y2="${Y(.3)}"/>`;
   const zt=[[-.66,.33,'Нит'],[0,.66,'TAG'],[.48,.66,'LAG'],[.83,.66,'Маньяк'],[-.66,-.66,'Камень'],[0,-.66,'Пассивный'],[.48,-.66,'Фиш'],[.83,-.66,'Колл-<tspan x="'+X(.83)+'" dy="12">стейшн</tspan>'],[.48,0,'Лузовый'],[.83,0,'Очень<tspan x="'+X(.83)+'" dy="12">лузовый</tspan>']]
@@ -1914,6 +1952,7 @@ function xyPlot(xy,locked,n,sz,loading){ const S=300, m=S/2, k=(S/2-18), X=v=>m+
     o.lastChild.textContent=`Сыграй 50+ раздач в режимах «GTO тест» или «Префлоп». Сейчас: ${n||0} из ${XY_MIN}.`; w.appendChild(o); }
   else if(xy){ const c=document.createElement('p'); c.className='xycap';
     const sg=v=>(v>0?'+':v<0?'−':'')+Math.abs(v);
+    if(brief){ c.textContent=w.dataset.mode==='point'?'Точка — твой стиль по последним раздачам.':'Облако — область, где вероятнее всего твой стиль: чем оно меньше, тем точнее оценка.'; w.appendChild(c); return w; }
     c.textContent=`Диапазоны ${sg(xy.vx)}% к ширине GTO · агрессия ${sg(Math.round(xy.y*100))} (шкала от −100 до +100). `+(w.dataset.mode==='point'?'Точка — твой стиль по последним решениям, уверенность высокая.':(xy.drift>=.3?'Облако растянуто: за последние сотни раздач твой стиль заметно сместился, свежие раздачи весят больше. ':'')+(xy.sspread>.1?'Облако — твоя игра в разных ситуациях. Если оно распалось на части, в разных спотах ты играешь по-разному. ':'Облако — где вероятнее всего твой стиль: чем оно меньше, тем увереннее оценка. С каждой игрой оно уточняется и может смещаться. ')+(xy.incons?'Ошибки в разные стороны гасят друг друга в среднем, поэтому игра нестабильная, даже если рядом с GTO.':''));
     w.appendChild(c);
     if(sz){ const c2=document.createElement('p'); c2.className='xycap'; c2.textContent=`Сайзинг: ${sz.pct}% рейзов нужного размера (из ${sz.n}).`; w.appendChild(c2); } }
@@ -2579,8 +2618,8 @@ function openProfile(){
       +`<div><b>${T.hands}</b><span>раздач</span></div><div><b>${T.sessions}</b><span>тестов</span></div>`;
     const locked=hst!=='load'&&(!HT||HN<XY_MIN);
     card.querySelector('#ptype').textContent=hst==='load'?'…':locked?'Тип пока не определён':HT.type;
-    card.querySelector('#pxy').replaceChildren(hst==='load'?xyPlot(null,true,0,null,true):xyPlot(HT&&HT.xy,locked,HN,HT&&HT.sz));
-    note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.hands?'Раздачи и точность — по всем раздачам: тесты, в том числе недоигранные, и «Префлоп». GTO, VPIP и PFR — по завершённым тестам.':'Пока нет раздач. Сыграй тест или несколько раздач в «Префлопе», и здесь появится статистика.'; };
+    card.querySelector('#pxy').replaceChildren(hst==='load'?xyPlot(null,true,0,null,true):xyPlot(HT&&HT.xy,locked,HN,HT&&HT.sz,false,true));
+    note.textContent=st==='load'?'Загружаю…':st==='err'?'Не удалось загрузить статистику. Проверь интернет и попробуй ещё раз.':T.hands?'Вся статистика — по всем раздачам: тесты, в том числе недоигранные, и «Префлоп».':'Пока нет раздач. Сыграй тест или несколько раздач в «Префлопе», и здесь появится статистика.'; };
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{
@@ -2590,6 +2629,12 @@ function openProfile(){
     for(const [k,n] of [['last300',300],['last100',100]]){ const x=d.slice(-n); HNP[k]=x.length; HTP[k]=histType(x); } hst='ok'; draw(); }).catch(()=>{ hst='err'; draw(); });
 }
 $('#score').onclick=e=>{ if(e.target.id==='profbtn') openProfile(); };
+// звуки игры (по умолчанию включены, выбор запоминается) и фоновая музыка (по умолчанию выключена)
+const sndUI=()=>{ const b=$('#sndbtn'); b.setAttribute('aria-pressed',SND.on); b.textContent=SND.on?'🔊':'🔇'; };
+$('#sndbtn').onclick=()=>{ SND.on=!SND.on; try{ localStorage.setItem('pc-sound',SND.on?'on':'off'); }catch(_){} sndUI(); if(SND.on){ sndCtx(); sndTurn(); } };
+sndUI();
+$('#musbtn').onclick=()=>{ const a=$('#bgm'), b=$('#musbtn'), on=b.getAttribute('aria-pressed')!=='true';
+  b.setAttribute('aria-pressed',on); a.volume=.35; if(on){ const p=a.play(); if(p&&p.catch) p.catch(()=>b.setAttribute('aria-pressed',false)); } else a.pause(); };
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
 if(AUTH){ showApp(); api('me',{token:AUTH.token}).then(r=>{ if(r&&r.ok===false&&r.error==='auth'){ doLogout(); $('#autherr').textContent=AERR.auth; } }).catch(()=>{}); }
 else showAuth('login');

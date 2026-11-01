@@ -6,9 +6,10 @@
 //   login    {login, password}       → {ok, token, login}
 //   me       {token}                 → {ok, login}
 //   logout   {token}                 → {ok}
-//   stats    {token}                 → {ok, login, all, last300, last100} — {sessions, hands, gto, acc, vpip, pfr, type}
+//   stats    {token}                 → {ok, login, all, last300, last100, tests, preflop} — {sessions, hands, gto, acc, vpip, pfr, type}
+//            всё по всем раздачам (тесты + «Префлоп»); tests и preflop — те же цифры по каждому источнику отдельно
 //   preflop  {token, id, started, dec} → {ok} — личный журнал режима «Префлоп», лист «Префлоп».
-//            Наружу не отдаётся никаким действием и в stats не входит; смотреть только в самой таблице.
+//            Хранится отдельно от тестов, в stats входит вместе с ними.
 //   history  {token}                 → {ok, dec} — последние ≤300 префлоп-решений игрока (тесты «Профиля» + журнал «Префлопа»)
 //            из листа «Последние 300»; тренажёр берёт их как стартовую точку для оценки профиля.
 //   без action — результат сессии {id, name, started, updated, summary, dec, token?};
@@ -216,18 +217,40 @@ function addHands_(id, login, dec, from) {
   const rows = handRows_(id, login, dec || []).slice(from || 0);
   if (rows.length) append_(sh_(HANDS, HANDS_HEAD), rows);
 }
-// раздачи и точность по списку решений: раздача — по номеру n/hn из клиента, у старых записей — по смене карт или позиции
-function decStats_(dec) {
-  let hands = 0, prev = null, pts = 0, n = 0;
+// статистика по списку решений: раздачи, точность, VPIP, PFR и балл GTO.
+// Раздача — по номеру n/hn из клиента, у старых записей — по смене карт или позиции.
+// GTO: взвешенная доля верных решений, вес dw приходит из клиента (сложные 2, средние 1, лёгкие 0,5); без dw балл не считается.
+// режет решения на куски по size раздач — чтобы «последние 100/300 раздач» считались точно, а не целой серией «Префлопа»
+function decChunks_(dec, size) {
+  const out = []; let prev = null, cnt = 0, cur = [];
   (dec || []).forEach(d => {
     if (!d) return;
     const key = d.n != null ? 'n' + d.n : d.hn != null ? 'h' + d.hn : (d.c || d.h) + '|' + d.pos;
-    if (key !== prev) hands++;
-    prev = key;
-    const g = d.gr != null ? d.gr : d.g;
-    if (g != null) { n++; pts += g === 2 ? 1 : g === 1 ? .5 : 0; }
+    if (key !== prev) { if (cnt === size) { out.push(cur); cur = []; cnt = 0; } cnt++; }
+    prev = key; cur.push(d);
   });
-  return { hands, acc: n ? Math.round(pts / n * 100) : null };
+  if (cur.length) out.push(cur);
+  return out;
+}
+function decStats_(dec) {
+  let hands = 0, prev = null, pts = 0, n = 0, vp = 0, pr = 0, cur = null, gw = 0, gy = 0;
+  const close = () => { if (cur) { if (cur.v) vp++; if (cur.r) pr++; } };
+  (dec || []).forEach(d => {
+    if (!d) return;
+    const key = d.n != null ? 'n' + d.n : d.hn != null ? 'h' + d.hn : (d.c || d.h) + '|' + d.pos;
+    if (key !== prev) { close(); hands++; cur = { v: false, r: false }; }
+    prev = key;
+    if (d.a === 'C' || d.a === 'R') cur.v = true;
+    if (d.a === 'R') cur.r = true;
+    const g = d.gr != null ? d.gr : d.g;
+    if (g != null) {
+      n++; pts += g === 2 ? 1 : g === 1 ? .5 : 0;
+      if (d.dw) { gw += d.dw; gy += d.dw * (g === 2 ? 1 : g === 1 ? .75 : 0); }
+    }
+  });
+  close();
+  return { hands, acc: n ? Math.round(pts / n * 100) : null, vpip: hands ? Math.round(vp / hands * 100) : null,
+    pfr: hands ? Math.round(pr / hands * 100) : null, gto: gw ? Math.round(gy / gw * 100) : null };
 }
 // Пересобирает «Раздачи профиля» из всех тестов в «Сессиях». Повторный запуск безопасен.
 function rebuildHands() {
@@ -354,28 +377,32 @@ function stats_(x) {
   // колонку «Решения (JSON)» (самую тяжёлую) не читаем: берём A:K и аккаунт из M
   const sh = sh_(SHEET, HEAD), cnt = sh.getLastRow() - 1;
   const base = cnt > 0 ? sh.getRange(2, 1, cnt, 11).getValues() : [], accs = cnt > 0 ? sh.getRange(2, 13, cnt, 1).getValues() : [];
-  // завершённые тесты дают всё; незавершённые тесты и «Префлоп» — только раздачи и точность
-  // (их раздачи подобраны тестом или фильтрами, поэтому VPIP, PFR и GTO по ним не считаем)
+  // вся статистика — по всем раздачам: завершённые тесты берут итог теста, недоигранные тесты и «Префлоп» считаются по решениям.
+  // Источники хранятся раздельно («Сессии» и «Префлоп»), в ответе есть и разбивка: tests и preflop.
   const list = [];
   base.forEach((r, i) => {
     if (String(accs[i][0]) !== a.key || /^pf/.test(String(r[1]))) return; // pf… — журнал «Префлопа», попавший сюда со старой версией скрипта
     const date = r[3] ? new Date(r[3]).getTime() : new Date(r[0]).getTime();
     let sm = {}; try { sm = JSON.parse(r[10] || '{}'); } catch (e) {}
-    if (+r[4] >= PROF_N && sm.type) list.push({ date, test: true, hands: +r[4], type: String(r[5]), gto: num(sm.gto), acc: num(r[9]), vpip: num(r[6]), pfr: num(r[7]) });
-    else { let d = []; try { d = JSON.parse(sh.getRange(i + 2, 12).getValue() || '[]'); } catch (e) {} const st = decStats_(d);
-      if (st.hands) list.push({ date, hands: st.hands, type: '', gto: null, acc: st.acc, vpip: null, pfr: null }); }
+    if (+r[4] >= PROF_N && sm.type) list.push({ date, src: 't', test: true, hands: +r[4], type: String(r[5]), gto: num(sm.gto), acc: num(r[9]), vpip: num(r[6]), pfr: num(r[7]) });
+    else { let d = []; try { d = JSON.parse(sh.getRange(i + 2, 12).getValue() || '[]'); } catch (e) {} addDec_(list, d, date, 't'); }
   });
   rows_(sh_(PF, PF_HEAD)).forEach(r => {
     if (key_(r[2]) !== a.key) return;
     let d = []; try { d = JSON.parse(r[7] || '[]'); } catch (e) { return; }
-    const st = decStats_(d);
-    if (st.hands) list.push({ date: r[3] ? new Date(r[3]).getTime() : new Date(r[0]).getTime(), hands: st.hands, type: '', gto: null, acc: st.acc, vpip: null, pfr: null });
+    addDec_(list, d, r[3] ? new Date(r[3]).getTime() : new Date(r[0]).getTime(), 'p');
   });
   list.sort((p, q) => p.date - q.date);
   const lastN = N => { const out = []; let n = 0; for (let i = list.length - 1; i >= 0 && n < N; i--) { out.unshift(list[i]); n += list[i].hands; } return out; };
-  return { ok: true, login: a.login, all: total_(list), last300: total_(lastN(300)), last100: total_(lastN(100)) };
+  return { ok: true, login: a.login, all: total_(list), last300: total_(lastN(300)), last100: total_(lastN(100)),
+    tests: total_(list.filter(r => r.src === 't')), preflop: total_(list.filter(r => r.src === 'p')) };
 }
 
+// решения недоигранного теста или серии «Префлопа» → записи по 10 раздач
+function addDec_(list, dec, date, src) {
+  decChunks_(dec, 10).forEach(c => { const st = decStats_(c);
+    if (st.hands) list.push({ date: c[0].t || date, src, hands: st.hands, type: '', gto: st.gto, acc: st.acc, vpip: st.vpip, pfr: st.pfr }); });
+}
 function total_(list) {
   const avg = f => { let w = 0, s = 0; for (const r of list) if (r[f] != null) { s += r[f] * r.hands; w += r.hands; } return w ? Math.round(s / w) : null; };
   // тип: самый частый среди тестов периода, при равенстве — более свежий
