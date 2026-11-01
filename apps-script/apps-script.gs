@@ -12,6 +12,8 @@
 //            Хранится отдельно от тестов, в stats входит вместе с ними.
 //   history  {token}                 → {ok, dec} — последние ≤300 префлоп-решений игрока (тесты «Профиля» + журнал «Префлопа»)
 //            из листа «Последние 300»; тренажёр берёт их как стартовую точку для оценки профиля.
+//   tests    {token}                 → {ok, tests:[{id, date, hands, gto, acc, dec}]} — 2 последних завершённых теста с решениями,
+//            по ним профиль показывает плитки и открывает разбор теста.
 //   без action — результат сессии {id, name, started, updated, summary, dec, token?};
 //   повторная отправка той же сессии (тот же id) обновляет её строку.
 
@@ -76,6 +78,7 @@ function doPost(e) {
       case 'stats': return out_(stats_(x));
       case 'preflop': return out_(savePreflop_(x));
       case 'history': return out_(history_(x));
+      case 'tests': return out_(tests_(x));
       default: return out_(saveSession_(x));
     }
   } catch (err) {
@@ -367,6 +370,26 @@ function rebuildRecent() {
   const sh = sh_(RECENT, RECENT_HEAD);
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
   rows_(sh_(ACC, ACC_HEAD)).forEach(r => updRecent_({ login: String(r[0]), key: String(r[1]) }, '', '', []));
+}
+
+// 2 последних завершённых теста игрока вместе с решениями (для разбора в профиле)
+function tests_(x) {
+  const a = auth_(x.token);
+  if (!a) return { ok: false, error: 'auth' };
+  const sh = sh_(SHEET, HEAD), cnt = sh.getLastRow() - 1;
+  if (cnt < 1) return { ok: true, tests: [] };
+  const base = sh.getRange(2, 1, cnt, 11).getValues(), accs = sh.getRange(2, 13, cnt, 1).getValues(), fin = [];
+  base.forEach((r, i) => {
+    if (String(accs[i][0]) !== a.key || /^pf/.test(String(r[1]))) return;
+    let sm = {}; try { sm = JSON.parse(r[10] || '{}'); } catch (e) {}
+    if (+r[4] >= PROF_N && sm.type) fin.push({ i, id: String(r[1]), date: new Date(r[0]).getTime(), hands: +r[4],
+      gto: sm.gto == null ? null : +sm.gto, acc: r[9] === '' ? null : +r[9] });
+  });
+  fin.sort((p, q) => q.date - p.date);
+  return { ok: true, tests: fin.slice(0, 2).map(t => {
+    let dec = []; try { dec = JSON.parse(sh.getRange(t.i + 2, 12).getValue() || '[]'); } catch (e) {}
+    return { id: t.id, date: t.date, hands: t.hands, gto: t.gto, acc: t.acc, dec };
+  }) };
 }
 
 // общая статистика игрока без конкретных раздач: за всё время и за последние 100 раздач

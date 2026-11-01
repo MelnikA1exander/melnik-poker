@@ -372,6 +372,16 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 @media (prefers-reduced-motion:reduce){.chipspin{animation-duration:4s}}
 .xylock b{font:700 16px var(--f-body)}.xylock span{font-size:13px;color:var(--muted)}
 .ptype2{font:700 22px/1.2 var(--f-display);margin:4px 0 0;text-align:center}
+.ptests{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ptest{background:var(--sunk);border-radius:12px;padding:10px 12px;display:grid;gap:6px;align-content:start}
+.ptest .ctx{margin:0}
+.ptest .pt2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ptest .pt2 div{display:grid;gap:1px}.ptest .pt2 b{font:700 18px var(--f-mono);font-variant-numeric:tabular-nums}.ptest .pt2 span{font-size:12px;color:var(--muted)}
+.ptest button{font:700 14px var(--f-body);background:var(--orange);color:#fff;border:0;border-radius:10px;padding:10px;cursor:pointer;margin-top:2px}
+.ptests .hint{grid-column:1/-1;margin:0}
+.ptitle{margin:4px 0 0;font:600 14px var(--f-body)}
+body.review .modesrow,body.review .controls,body.review #table,body.review #log,body.review #stats,body.review #ranges{display:none!important}
+.revbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.revbar .ctx{flex:1;min-width:0}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -2617,13 +2627,75 @@ $('#logout').onclick=()=>{
   card.querySelector('#cf-no').onclick=close; card.querySelector('#cf-yes').onclick=()=>{ close(); doLogout(); };
   card.querySelector('#cf-no').focus({preventScroll:true});
 };
+// ---- разбор прошлого теста: раздачи восстанавливаются из сохранённых решений (карты, позиции, ставки соперников, свои действия),
+// оценки пересчитываются по текущим правилам. Ничего не пишется ни в базу, ни в браузер, текущая игра не трогается.
+function replayTest(dec,ST){
+  const K={GAME,REC,MODE,filter,N,STACK,SMAP,H,FRAMES,ANIM,IDLE,RUN,RS,BACK,HIST,S:JSON.stringify(S),session:{...session},snd:SND.on,noanim:window.NOANIM},
+    F={render,play,persist,botAct,renderStats,updScore,finishHand};
+  const miss=[]; let out=null;
+  try{
+    window.NOANIM=1; SND.on=false; render=()=>{}; play=()=>{ FRAMES=[]; }; persist=async()=>{}; finishHand=()=>{}; renderStats=()=>{}; updScore=()=>{};
+    GAME='prof'; REC=true; MODE='gto'; filter='all'; SMAP=null; BACK=null; HIST={rows:[],st:'none'}; ANIM=null; IDLE=false;
+    N=+(dec[0]&&dec[0].N)||9; RUN={name:'',hands:[]}; RS={id:'review',dec:[]};
+    const G=[]; for(const x of dec){ if(!x||x.n==null) continue; const g=G[G.length-1]; if(g&&g[0].n===x.n) g.push(x); else G.push([x]); }
+    const seatOf=l=>{ for(let i=0;i<N;i++) if(lab(i)===l) return i; return -1; };
+    for(const g of G){
+      const last=g[g.length-1], hs=seatOf(g[0].pos); if(hs<0||!last.c){ miss.push(g[0].n); continue; }
+      const ev=/^Все/.test(last.ctx||'')?[]:String(last.ctx||'').split(' · ').map(t=>{ const m=t.match(/^(\S+) (рейз|колл|чек|олл-ин)\s*(\d+)?/); return m?{who:m[1],a:m[2]==='колл'?'C':m[2]==='чек'?'X':'R',amt:+(m[3]||0)}:null; }).filter(e=>e&&e.who!=='ты').map(e=>({...e,seat:seatOf(e.who)}));
+      Math.random=seeded(g[0].n*7919+13);
+      const h=setupHand(); STACK=ST; h.hero=hs; h.toAct=[...Array(N).keys()];
+      const want=[last.c.slice(0,2),last.c.slice(2,4)];
+      for(const q of h.players){ if(q.i===hs) continue; q.cards=q.cards.map(c=>want.includes(c)?h.deck.find(d=>!want.includes(d)&&!h.players.some(pp=>pp.cards.includes(d))):c); q.h=hclass(q.cards); }
+      h.players[hs].cards=want; h.players[hs].h=hclass(want);
+      FRAMES=[]; H=h; IDLE=false; ANIM=null;
+      botAct=(hh,p)=>{ const e=ev[0]; if(e&&e.seat===p){ ev.shift(); apply(hh,p,e.a,e.amt); } else apply(hh,p,hh.curBet-hh.players[p].bet>0?'F':'X',0); };
+      run(h);
+      for(const x of g){ if(h.over||h.toAct[0]!==hs){ miss.push(x.n); break; } const k=h.decisions.length; heroAct(x.a,x.amt); if(h.decisions.length===k){ miss.push(x.n); break; } }
+      botAct=F.botAct;
+      if(!h.over){ h.over=true; h.outcome='flop'; }
+      h.inRun=true; if(h.decisions.length) RUN.hands.push(h);
+    }
+    const A=profAnalyze(RUN), ds=RUN.hands.flatMap(h=>h.decisions.filter(x=>!x.post));
+    out={run:RUN,N,miss:miss.length,nDec:ds.length,good:ds.filter(x=>x.g===2).length,gto:A.irt?Math.round(A.irt.score):null};
+  } catch(e){ out=null; }
+  finally{
+    Math.random=NATIVE_RANDOM; botAct=F.botAct; render=F.render; play=F.play; persist=F.persist; finishHand=F.finishHand; renderStats=F.renderStats; updScore=F.updScore;
+    ({GAME,REC,MODE,filter,N,STACK,SMAP,H,FRAMES,ANIM,IDLE,RUN,RS,BACK,HIST}=K); S=JSON.parse(K.S); session=K.session; SND.on=K.snd; window.NOANIM=K.noanim;
+  }
+  return out;
+}
+// старые тесты шли со стеками 500: берём тот стек, при котором все решения воспроизводятся
+function rebuildTest(t){ let best=null;
+  for(const st of [400,500]){ const r=replayTest(t.dec||[],st); if(r&&(!best||r.miss<best.miss)) best=r; if(best&&!best.miss) break; }
+  return best; }
+let REVIEW=null;
+function openReview(t,r){
+  const sh=$('#sheet'); if(sh) sh.remove();
+  if(ANIM){ clearTimeout(ANIM); ANIM=null; }
+  REVIEW={RUN,RS,N,HIST,REC};
+  RUN=r.run; RUN.name=AUTH?AUTH.login:''; RS=null; N=r.N; HIST={rows:[],st:'none'}; REC=true;
+  document.body.classList.add('review');
+  renderResults();
+  const p=$('#panel'), nb=p.querySelector('#newprof'); if(nb) nb.remove();
+  for(const xc of p.querySelectorAll('.xycap')) if(/^Тип и координаты — по последним/.test(xc.textContent)) xc.textContent=`Тип и координаты — по ${r.nDec} решениям этого теста.`;
+  const bar=document.createElement('div'); bar.className='revbar';
+  bar.innerHTML='<button class="helpbtn" type="button">← Назад в профиль</button><span class="ctx"></span>';
+  bar.querySelector('.ctx').textContent=`Тест от ${fmtDate(t.date)}`;
+  bar.querySelector('button').onclick=closeReview; p.prepend(bar);
+  const bk=document.createElement('button'); bk.className='next'; bk.type='button'; bk.textContent='Назад в профиль'; bk.onclick=closeReview; p.append(bk);
+  window.scrollTo(0,0);
+}
+function closeReview(){ if(!REVIEW) return;
+  ({RUN,RS,N,HIST,REC}=REVIEW); REVIEW=null; document.body.classList.remove('review');
+  if(IDLE||!H) idle(); else render(); updScore(); window.scrollTo(0,0); openProfile(); }
+const fmtDate=ts=>{ try{ return new Date(ts).toLocaleDateString('ru-RU',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
 // «Профиль»: координаты и статистика за последние 300 (по умолчанию) или 100 раздач
 let PPER='last300';
 function openProfile(){
   const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
   const card=document.createElement('div'); card.className='sheetcard'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
   const HTP={last300:null,last100:null}, HNP={last300:0,last100:0}; let hst='load';
-  card.innerHTML='<div class="sheethead"><div><div class="ctx">Префлоп профиль игрока</div><p class="pname"></p></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><div class="seg" id="pper"><button type="button" data-p="last300">Последние 300 раздач</button><button type="button" data-p="last100">Последние 100 раздач</button></div><h2 class="ptype2" id="ptype"></h2><div id="pxy"></div><div class="pcards"></div><p class="hint" id="pnote"></p>';
+  card.innerHTML='<div class="sheethead"><div><div class="ctx">Префлоп профиль игрока</div><p class="pname"></p></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><div class="seg" id="pper"><button type="button" data-p="last300">Последние 300 раздач</button><button type="button" data-p="last100">Последние 100 раздач</button></div><h2 class="ptype2" id="ptype"></h2><div id="pxy"></div><div class="pcards"></div><p class="hint" id="pnote"></p><p class="ptitle">Последние тесты</p><div class="ptests"><p class="hint">Загружаю…</p></div>';
   card.querySelector('.pname').textContent=AUTH?AUTH.login:'';
   ov.appendChild(card); document.body.appendChild(ov);
   const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); }; card.querySelector('#sheet-close').onclick=close;
@@ -2643,6 +2715,18 @@ function openProfile(){
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{
     if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); doLogout(); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
     R=r; st='ok'; draw(); }).catch(()=>{ st='err'; draw(); });
+  const pt=card.querySelector('.ptests');
+  api('tests',{token:AUTH&&AUTH.token}).then(r=>{
+    if(!r||!r.ok||!Array.isArray(r.tests)) throw new Error();
+    if(!r.tests.length){ pt.innerHTML='<p class="hint">Пока нет завершённых тестов. Пройди GTO тест на 50 раздач, и он появится здесь.</p>'; return; }
+    pt.innerHTML='';
+    for(const t of r.tests){ const rb=rebuildTest(t), el=document.createElement('div'); el.className='ptest';
+      const good=rb?`${rb.good}/${rb.nDec}`:'—', gto=rb&&rb.gto!=null?rb.gto+'%':(t.gto!=null?t.gto+'%':'—');
+      el.innerHTML='<p class="ctx"></p><div class="pt2"><div><b></b><span>верных ответов</span></div><div><b></b><span>оценка GTO</span></div></div><button type="button">Посмотреть</button>';
+      el.querySelector('.ctx').textContent=`${fmtDate(t.date)} · ${t.hands} раздач`; const bs=el.querySelectorAll('b'); bs[0].textContent=good; bs[1].textContent=gto;
+      const btn=el.querySelector('button'); if(rb&&rb.run.hands.length) btn.onclick=()=>openReview(t,rb); else { btn.disabled=true; btn.title='Разбор этого теста не удалось восстановить'; }
+      pt.appendChild(el); }
+  }).catch(()=>{ pt.innerHTML='<p class="hint">Не удалось загрузить тесты.</p>'; });
   api('history',{token:AUTH&&AUTH.token}).then(r=>{ const d=r&&r.ok&&Array.isArray(r.dec)?r.dec:[];
     for(const [k,n] of [['last300',300],['last100',100]]){ const x=d.slice(-n); HNP[k]=x.length; HTP[k]=histType(x); } hst='ok'; draw(); }).catch(()=>{ hst='err'; draw(); });
 }
