@@ -936,23 +936,25 @@ function play(){
 const SND={on:(()=>{ try{ return localStorage.getItem('pc-sound')!=='off'; }catch(e){ return true; } })(),ctx:null,hand:null,n:0,turn:null};
 function sndCtx(){ if(!SND.on) return null; try{ if(!SND.ctx){ const A=window.AudioContext||window.webkitAudioContext; if(!A) return null; SND.ctx=new A(); }
   if(SND.ctx.state==='suspended') SND.ctx.resume(); return SND.ctx; }catch(e){ return null; } }
+// общая громкость всех звуков игры
+const SND_VOL=.9; function sndOut(c){ if(!SND.out||SND.out.context!==c){ SND.out=c.createGain(); SND.out.gain.value=SND_VOL; SND.out.connect(c.destination); } return SND.out; }
 document.addEventListener('pointerdown',()=>{ if(SND.on&&sndCtx()) sndLoad('chips.mp3'); },{passive:true}); // браузеры дают звук только после касания
 function sndNoise(c,dur){ const b=c.createBuffer(1,Math.ceil(c.sampleRate*dur),c.sampleRate), d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; const s=c.createBufferSource(); s.buffer=b; return s; }
 // фишки: 4–6 тяжёлых глиняных фишек быстро ложатся одна на другую — мягкий щелчок с глухим низом, интервал сокращается
 function sndChip(c,t,vol){ const n=sndNoise(c,.03), bp=c.createBiquadFilter(), g=c.createGain();
   bp.type='bandpass'; bp.frequency.value=1250+Math.random()*500; bp.Q.value=1.2;
   g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.6*vol,t+.004); g.gain.exponentialRampToValueAtTime(.0001,t+.034);
-  n.connect(bp).connect(g).connect(c.destination); n.start(t); n.stop(t+.03);
+  n.connect(bp).connect(g).connect(sndOut(c)); n.start(t); n.stop(t+.03);
   for(const fq of [420+Math.random()*80,1150+Math.random()*150,2100+Math.random()*250]){ const o=c.createOscillator(), og=c.createGain(); o.type='sine'; o.frequency.value=fq;
     og.gain.setValueAtTime(.0001,t); og.gain.exponentialRampToValueAtTime((fq<700?.16:.06)*vol,t+.004); og.gain.exponentialRampToValueAtTime(.0001,t+(fq<700?.07:.045));
-    o.connect(og).connect(c.destination); o.start(t); o.stop(t+.08); } }
+    o.connect(og).connect(sndOut(c)); o.start(t); o.stop(t+.08); } }
 // настоящая запись фишек (chips.mp3 рядом со страницей): грузится один раз, играет с лёгким разбросом тона; пока не загрузилась — синтез
 const SNDBUF={};
 function sndLoad(name){ if(SNDBUF[name]!==undefined) return; SNDBUF[name]=null; const c=SND.ctx; if(!c) return;
   fetch(name).then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(b=>new Promise((ok,no)=>c.decodeAudioData(b,ok,no))).then(buf=>{ SNDBUF[name]=buf; }).catch(()=>{}); }
 function sndSample(name,vol){ const c=sndCtx(); if(!c) return false; sndLoad(name); const buf=SNDBUF[name]; if(!buf) return false;
   const s=c.createBufferSource(), g=c.createGain(); s.buffer=buf; s.playbackRate.value=.94+Math.random()*.12; g.gain.value=vol;
-  s.connect(g).connect(c.destination); s.start(); return true; }
+  s.connect(g).connect(sndOut(c)); s.start(); return true; }
 function sndChips(){ if(sndSample('chips.mp3',.8)) return; const c=sndCtx(); if(!c) return; let t=c.currentTime+.01, gap=.045; const k=4+Math.floor(Math.random()*3);
   for(let i=0;i<k;i++){ sndChip(c,t,.55+.45*Math.random()); t+=gap*(.8+.4*Math.random()); gap*=.85; } }
 // сброс карт: мягкое шуршание карты по сукну — розовый шум через полосу 500–3000 Гц, плавный подъём и спад ~0,22 с
@@ -961,11 +963,11 @@ function sndFold(){ const c=sndCtx(); if(!c) return; const t=c.currentTime+.01, 
   const s=c.createBufferSource(); s.buffer=b; const hp=c.createBiquadFilter(), lp=c.createBiquadFilter(), g=c.createGain();
   hp.type='highpass'; hp.frequency.value=1100; lp.type='lowpass'; lp.Q.value=.5; lp.frequency.setValueAtTime(6000,t); lp.frequency.linearRampToValueAtTime(3200,t+dur);
   g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.272,t+.041); g.gain.setValueAtTime(.272,t+.082); g.gain.linearRampToValueAtTime(0,t+dur);
-  s.connect(hp).connect(lp).connect(g).connect(c.destination); s.start(t); }
+  s.connect(hp).connect(lp).connect(g).connect(sndOut(c)); s.start(t); }
 function sndTurn(){ const c=sndCtx(); if(!c) return; const t0=c.currentTime;
   [[660,0],[880,.09]].forEach(([fq,dt])=>{ const t=t0+dt, o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=fq;
     g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.09,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+.22);
-    o.connect(g).connect(c.destination); o.start(t); o.stop(t+.24); }); }
+    o.connect(g).connect(sndOut(c)); o.start(t); o.stop(t+.24); }); }
 // новые записи в журнале раздачи → звук (по одному звуку каждого вида за кадр)
 function sndLog(h){ const root=h.anim?Object.getPrototypeOf(h):h, L=h.log.length;
   if(SND.hand!==root){ SND.hand=root; SND.n=root.over?L:0; SND.turn=null; }
