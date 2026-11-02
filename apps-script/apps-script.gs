@@ -4,7 +4,8 @@
 // Все запросы — POST с JSON в теле (Content-Type: text/plain). Поле action выбирает действие:
 //   register {login, password}       → {ok, token, login}
 //   login    {login, password}       → {ok, token, login}
-//   me       {token}                 → {ok, login}
+//   me       {token}                 → {ok, login, settings}
+//   settings {token, settings, initialize?} → {ok, settings}; только изменённые поля, initialize не перезаписывает существующие настройки
 //   logout   {token}                 → {ok}
 //   stats    {token}                 → {ok, login, all, last300, last100, tests, preflop} — {sessions, hands, gto, acc, vpip, pfr, type}
 //            всё по всем раздачам (тесты + «Префлоп»); tests и preflop — те же цифры по каждому источнику отдельно
@@ -19,7 +20,7 @@
 
 const SHEET = 'Сессии', ACC = 'Аккаунты', TOK = 'Входы', PF = 'Префлоп', HANDS = 'Раздачи профиля', RECENT = 'Последние 300';
 const HEAD = ['Получено', 'ID', 'Имя', 'Начало', 'Раздач', 'Тип', 'VPIP', 'PFR', 'Лимпы', 'Точность', 'Итог (JSON)', 'Решения (JSON)', 'Аккаунт'];
-const ACC_HEAD = ['Логин', 'Ключ', 'Соль', 'Хеш', 'Создан', 'Последний вход'];
+const ACC_HEAD = ['Логин', 'Ключ', 'Соль', 'Хеш', 'Создан', 'Последний вход', 'Настройки (JSON)'];
 const PF_HEAD = ['Получено', 'ID', 'Аккаунт', 'Начало', 'Решений', 'Верно %', 'Неверных', 'Решения (JSON)'];
 // «Раздачи профиля» — указатель: 3 ячейки на решение. Ключ «аккаунт/тест/№ раздачи» ведёт к полной записи теста в «Сессиях».
 const HANDS_HEAD = ['Время', 'Ключ', 'Раздача'];
@@ -73,7 +74,8 @@ function doPost(e) {
     switch (x && x.action) {
       case 'register': return out_(register_(x));
       case 'login': return out_(login_(x));
-      case 'me': { const a = auth_(x.token); return out_(a ? { ok: true, login: a.login } : { ok: false, error: 'auth' }); }
+      case 'me': { const a = auth_(x.token); return out_(a ? { ok: true, login: a.login, settings: readSettings_(a) } : { ok: false, error: 'auth' }); }
+      case 'settings': return out_(saveSettings_(x));
       case 'logout': return out_(logout_(x));
       case 'stats': return out_(stats_(x));
       case 'preflop': return out_(savePreflop_(x));
@@ -127,9 +129,9 @@ function register_(x) {
   if (pl < 4 || pl > 25) return { ok: false, error: 'password_format' };
   if (findAcc_(k)) return { ok: false, error: 'login_taken' };
   const salt = rnd_(), now = new Date();
-  append_(sh_(ACC, ACC_HEAD), [[login, k, salt, hash_(salt, pw), now, now]]);
+  append_(sh_(ACC, ACC_HEAD), [[login, k, salt, hash_(salt, pw), now, now, '']]);
   const acc = { login };
-  return { ok: true, token: issue_(acc), login };
+  return { ok: true, token: issue_(acc), login, settings: null };
 }
 
 function login_(x) {
@@ -138,7 +140,7 @@ function login_(x) {
   const acc = findAcc_(k);
   if (!acc || hash_(acc.salt, pw) !== acc.hash) { fail_(k); return { ok: false, error: 'bad_credentials' }; }
   acc.sh.getRange(acc.row, 6).setValue(new Date());
-  return { ok: true, token: issue_(acc), login: acc.login };
+  return { ok: true, token: issue_(acc), login: acc.login, settings: readSettings_(acc) };
 }
 
 function auth_(token) {
@@ -149,6 +151,42 @@ function auth_(token) {
     return acc ? { login: acc.login, key: key_(acc.login) } : null;
   }
   return null;
+}
+
+// ---------- настройки аккаунта ----------
+const SETTINGS_DEFAULTS = { felt: 'green', theme: 'system', sound: true, music: false };
+function cleanSettings_(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out = {};
+  for (const k of Object.keys(value)) {
+    if (!Object.prototype.hasOwnProperty.call(SETTINGS_DEFAULTS, k)) return null;
+    const v = value[k];
+    if (k === 'felt' && !['green', 'blue', 'red', 'purple'].includes(v)) return null;
+    if (k === 'theme' && !['system', 'light', 'dark'].includes(v)) return null;
+    if ((k === 'sound' || k === 'music') && typeof v !== 'boolean') return null;
+    out[k] = v;
+  }
+  return out;
+}
+function readSettings_(account) {
+  const acc = findAcc_(key_(account.login));
+  if (!acc) return null;
+  const raw = acc.sh.getRange(acc.row, 7).getValue();
+  if (!raw) return null;
+  try { const clean = cleanSettings_(JSON.parse(String(raw))); return clean ? Object.assign({}, SETTINGS_DEFAULTS, clean) : null; }
+  catch (_) { return null; }
+}
+function saveSettings_(x) {
+  const account = auth_(x.token);
+  if (!account) return { ok: false, error: 'auth' };
+  const patch = cleanSettings_(x.settings);
+  if (!patch || !Object.keys(patch).length) return { ok: false, error: 'settings' };
+  const current = readSettings_(account);
+  // Два устройства могут одновременно впервые открыть аккаунт: первый сохранённый выбор побеждает.
+  if (x.initialize === true && current) return { ok: true, settings: current };
+  const settings = Object.assign({}, SETTINGS_DEFAULTS, current || {}, patch), acc = findAcc_(account.key);
+  acc.sh.getRange(acc.row, 7).setValue(JSON.stringify(settings));
+  return { ok: true, settings };
 }
 
 function logout_(x) {
