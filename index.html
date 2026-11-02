@@ -9,7 +9,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400&family=Unbounded:wght@500;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<script>try{const t=localStorage.getItem('mp-theme'); if(t==='dark'||t==='light') document.documentElement.dataset.theme=t;}catch(e){}</script>
+<script>try{const t=localStorage.getItem('mp-theme'); if(t==='dark'||t==='light') document.documentElement.dataset.theme=t; const f=localStorage.getItem('mp-felt'); if(['green','blue','red','purple'].includes(f)) document.documentElement.dataset.felt=f;}catch(e){}</script>
 <style>
 /* Layout: phone-first column. Header with modes, oval felt table with seats + 5 board slots, action bar under the table, verdict + range grid after answer. */
 :root{
@@ -34,6 +34,9 @@
   --raise:#E06A47; --orange:#EE9440; --call:#4CB57A; --fold:#25312B; --mix:#D9A940;
   --good:#5CC98A; --good-bg:#15301F; --ok:#E2B04F; --ok-bg:#33280F; --bad:#EE7B6E; --bad-bg:#3A1A16;
   --card:#F3F3EF; color-scheme:dark}
+:root[data-felt="blue"]{--felt:#17466B;--felt-2:#286A96}
+:root[data-felt="red"]{--felt:#701F32;--felt-2:#9D384C}
+:root[data-felt="purple"]{--felt:#4B2C70;--felt-2:#73509A}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
   padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:16px 40px}
@@ -70,7 +73,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 /* ---- table ---- */
 .table-wrap{position:relative;width:100%;aspect-ratio:16/10.5;max-width:100%}
 .rail{position:absolute;inset:7% 6% 9% 6%;border-radius:999px;background:var(--rail);padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
-.felt{width:100%;height:100%;border-radius:999px;background:radial-gradient(110% 90% at 50% 40%, var(--felt-2), var(--felt) 72%);
+.felt{width:100%;height:100%;border-radius:999px;
+  background:radial-gradient(ellipse farthest-side at 50% 46%,var(--felt-2) 0%,var(--felt) 65%,color-mix(in srgb,var(--felt) 66%,#000) 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.68),inset 0 0 8px 2px rgba(255,255,255,.42),inset 0 0 24px 5px rgba(255,255,255,.18),0 0 7px rgba(255,255,255,.18);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--felt-ink)}
 .board{display:flex;gap:5px}
 .potline{font:600 12px var(--f-mono);background:rgba(0,0,0,.28);padding:3px 10px;border-radius:999px;font-variant-numeric:tabular-nums}
@@ -159,7 +164,6 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .hdr-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .iconbtn{width:34px;height:30px;flex-shrink:0;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 15px var(--f-body);cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .iconbtn[aria-pressed="true"]{background:var(--sunk);color:var(--ink);border-color:var(--ink)}
-#musbtn[aria-pressed="false"],#sndbtn[aria-pressed="false"]{opacity:.55}
 @media (max-width:520px){.hdr-r{gap:6px}.hdr-r .helpbtn{font-size:12px;padding:5px 9px}.iconbtn{width:30px;height:28px;font-size:14px}}
 .helpbtn{font:600 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
 .help h3{font:700 13px var(--f-display);margin:6px 0 0}
@@ -382,6 +386,23 @@ table.st td.n{text-align:right;font-family:var(--f-mono);font-size:13px}
 .ptitle{margin:4px 0 0;font:600 14px var(--f-body)}
 body.review .modesrow,body.review .controls,body.review #table,body.review #log,body.review #stats,body.review #ranges{display:none!important}
 .revbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.revbar .ctx{flex:1;min-width:0}
+.settings-dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);padding:24px;width:calc(100% - 32px);max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 24px 80px #0005}
+.settings-dialog::backdrop{background:rgba(0,0,0,.5)}
+.settings-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.settings-head h2{font:700 20px var(--f-body);margin:0}
+.settings-dialog fieldset{border:0;padding:0;margin:0 0 16px;min-width:0}
+.settings-dialog legend{font-weight:600;margin-bottom:10px}
+.felt-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.felt-option{display:grid;justify-items:center;gap:8px;padding:10px 2px;border:1px solid transparent;border-radius:12px;background:var(--sunk);color:var(--muted);font:500 11px var(--f-body);cursor:pointer}
+.felt-option[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.felt-swatch{display:grid;place-items:center;width:42px;height:32px;border-radius:50%;background:radial-gradient(ellipse farthest-side at 50% 46%,var(--swatch-light),var(--swatch) 65%,color-mix(in srgb,var(--swatch) 66%,#000));color:#fff;font:700 20px var(--f-body);box-shadow:inset 0 0 0 1px #ffffff80,inset 0 0 5px 1px #ffffff50}
+.felt-swatch::after{content:'✓';visibility:hidden}.felt-option[aria-pressed="true"] .felt-swatch::after{visibility:visible}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 0;border-top:1px solid var(--line);font-weight:500}
+.settings-toggle{min-width:74px;min-height:36px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--sunk);color:var(--muted);font:600 13px var(--f-body);cursor:pointer}
+.settings-toggle[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.settings-dialog button:focus-visible,#settingsbtn:focus-visible{outline:3px solid var(--call);outline-offset:3px}
+#settingsbtn{width:36px;height:36px}#settingsbtn svg{width:20px;height:20px}
+@media(max-width:380px){.settings-dialog{padding:18px}.felt-option{font-size:10px}}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -400,9 +421,21 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 <div class="wrap" id="app" hidden>
   <header>
     <h1>Melnik Poker</h1>
-    <div class="hdr-r"><button class="themesw" id="theme" type="button" role="switch"><i class="sw-ic sw-sun"></i><i class="sw-ic sw-moon"></i><b class="sw-knob"></b></button><button class="iconbtn" id="musbtn" type="button" aria-pressed="false" aria-label="Музыка" title="Музыка">♪</button><button class="iconbtn" id="sndbtn" type="button" aria-pressed="true" aria-label="Звуки игры" title="Звуки игры">🔊</button><audio id="bgm" src="music.m4a" loop preload="none"></audio><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
+    <div class="hdr-r"><button class="iconbtn" id="settingsbtn" type="button" aria-label="Настройки" title="Настройки" aria-haspopup="dialog" aria-controls="settings-dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9.5 3-.5 2-2 .9-1.8-.6-2.5 4.3L4 11v2l-1.8 1.4 2.5 4.3 2-.6 1.8 1 .5 1.9h5l.5-2 2-.9 1.8.6 2.5-4.3L19 13v-2l1.8-1.4-2.5-4.3-2 .6-1.8-1L14 3z"/><circle cx="12" cy="12" r="3"/></svg></button><audio id="bgm" src="music.m4a" loop preload="none"></audio><div class="score" id="score"></div><button class="helpbtn" id="help" type="button">Справка</button><button class="helpbtn" id="logout" type="button">Выйти</button></div>
   </header>
 
+  <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+    <div class="settings-head"><h2 id="settings-title">Настройки</h2><button type="button" class="iconbtn" id="settings-close" aria-label="Закрыть настройки" autofocus>✕</button></div>
+    <fieldset><legend>Цвет сукна</legend><div class="felt-options">
+      <button type="button" class="felt-option" data-felt="green" aria-pressed="true"><span class="felt-swatch" style="--swatch:#1C5A43;--swatch-light:#27705A" aria-hidden="true"></span>Зелёное</button>
+      <button type="button" class="felt-option" data-felt="blue" aria-pressed="false"><span class="felt-swatch" style="--swatch:#17466B;--swatch-light:#286A96" aria-hidden="true"></span>Синее</button>
+      <button type="button" class="felt-option" data-felt="red" aria-pressed="false"><span class="felt-swatch" style="--swatch:#701F32;--swatch-light:#9D384C" aria-hidden="true"></span>Красное</button>
+      <button type="button" class="felt-option" data-felt="purple" aria-pressed="false"><span class="felt-swatch" style="--swatch:#4B2C70;--swatch-light:#73509A" aria-hidden="true"></span>Фиолетовое</button>
+    </div></fieldset>
+    <div class="settings-row"><span id="theme-label">Тёмная тема</span><button class="themesw" id="theme" type="button" role="switch" aria-labelledby="theme-label"><i class="sw-ic sw-sun"></i><i class="sw-ic sw-moon"></i><b class="sw-knob"></b></button></div>
+    <div class="settings-row"><span id="sound-label">Звуки игры</span><button class="settings-toggle" id="sndbtn" type="button" aria-pressed="true" aria-labelledby="sound-label">Вкл</button></div>
+    <div class="settings-row"><span id="music-label">Музыка</span><button class="settings-toggle" id="musbtn" type="button" aria-pressed="false" aria-labelledby="music-label">Выкл</button></div>
+  </dialog>
   <div class="modesrow">
   <div class="seg" id="modes">
     <button id="m-prof" aria-pressed="true">GTO тест</button>
@@ -2448,6 +2481,7 @@ $('#theme').onclick=()=>{ const t=curTheme()==='dark'?'light':'dark', R=document
 syncTheme();
 $('#players').onchange=e=>{ N=+e.target.value; save(); idle(); };
 document.addEventListener('keydown',e=>{
+  if($('#settings-dialog').open) return;
   if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
   if(RNGV&&!document.getElementById('sheet')) return; // во вкладке «Диапазоны» горячие клавиши стола не работают
   if(document.getElementById('app').hidden) return;
@@ -2732,11 +2766,22 @@ function openProfile(){
 }
 $('#score').onclick=e=>{ if(e.target.id==='profbtn') openProfile(); };
 // звуки игры (по умолчанию включены, выбор запоминается) и фоновая музыка (по умолчанию выключена)
-const sndUI=()=>{ const b=$('#sndbtn'); b.setAttribute('aria-pressed',SND.on); b.textContent=SND.on?'🔊':'🔇'; };
+const sndUI=()=>{ const b=$('#sndbtn'); b.setAttribute('aria-pressed',SND.on); b.textContent=SND.on?'Вкл':'Выкл'; };
 $('#sndbtn').onclick=()=>{ SND.on=!SND.on; try{ localStorage.setItem('pc-sound',SND.on?'on':'off'); }catch(_){} sndUI(); if(SND.on){ sndCtx(); sndTurn(); } };
 sndUI();
 $('#musbtn').onclick=()=>{ const a=$('#bgm'), b=$('#musbtn'), on=b.getAttribute('aria-pressed')!=='true';
-  b.setAttribute('aria-pressed',on); a.volume=.35; if(on){ const p=a.play(); if(p&&p.catch) p.catch(()=>b.setAttribute('aria-pressed',false)); } else a.pause(); };
+  a.volume=.35; if(on){ b.setAttribute('aria-pressed',true); b.textContent='Вкл'; const p=a.play(); if(p&&p.catch) p.catch(()=>{ b.setAttribute('aria-pressed',false); b.textContent='Выкл'; }); } else { a.pause(); b.setAttribute('aria-pressed',false); b.textContent='Выкл'; } };
+const settingsDialog=$('#settings-dialog');
+$('#settingsbtn').onclick=()=>settingsDialog.showModal();
+$('#settings-close').onclick=()=>settingsDialog.close();
+let settingsBackdrop=false;
+settingsDialog.addEventListener('pointerdown',e=>{ settingsBackdrop=e.target===settingsDialog&&outsideSettings(e); });
+function outsideSettings(e){ const r=settingsDialog.getBoundingClientRect(); return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom; }
+settingsDialog.addEventListener('click',e=>{ if(settingsBackdrop&&e.target===settingsDialog&&outsideSettings(e)) settingsDialog.close(); settingsBackdrop=false; });
+function syncFelt(){ const f=document.documentElement.dataset.felt||'green'; document.querySelectorAll('.felt-option').forEach(b=>b.setAttribute('aria-pressed',b.dataset.felt===f)); }
+document.querySelectorAll('.felt-option').forEach(b=>{ b.onclick=()=>{ document.documentElement.dataset.felt=b.dataset.felt; try{ localStorage.setItem('mp-felt',b.dataset.felt); }catch(e){} syncFelt(); }; });
+syncFelt();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',syncTheme);
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
 if(AUTH){ showApp(); api('me',{token:AUTH.token}).then(r=>{ if(r&&r.ok===false&&r.error==='auth'){ doLogout(); $('#autherr').textContent=AERR.auth; } }).catch(()=>{}); }
 else showAuth('login');
