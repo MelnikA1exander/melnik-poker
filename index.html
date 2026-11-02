@@ -1107,6 +1107,7 @@ function renderTable(h=H){
   $('#log').innerHTML=txt;
 }
 function presetsFor(d){
+  if(d.ch&&d.ch.source&&!(d.callers||0)){const mx=d.maxTo||STACK,v=d.ch.source.raiseTo;return [[Math.min(mx,v),'по таблице'],[mx,'олл-ин']];}
   // рейз ×2, ×3, ×4 от последней ставки, остальное ползунком; без ставки после флопа — доли банка
   if(d.post&&!d.curBet){ const P=d.pot; return [[.33,'1/3'],[.5,'1/2'],[.75,'3/4'],[1,'банк']].map(([f,l])=>[Math.max(BB,ev(f*P)),l]).filter(([v])=>v<d.maxTo).concat([[d.maxTo,'олл-ин']]); }
   if(d.kind==='open'&&MODE!=='ind'){ const mx=d.maxTo||STACK, v=d.ch&&d.ch.source?d.ch.source.raiseTo:10; return [[Math.min(mx,v+d.callers*BB),(v/BB).toLocaleString('ru-RU')+' ББ'],[Math.min(mx,12+d.callers*BB),'3 ББ'],[Math.min(mx,16+d.callers*BB),'4 ББ'],[mx,'олл-ин']]; }
@@ -1145,7 +1146,7 @@ function renderActions(){
     inp.oninput=()=>{ const v=+inp.value; setAmt(v,true); };
     inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); heroAct('R',amount); } };
     $('#minus').onclick=()=>setAmt(amount-2); $('#plus').onclick=()=>setAmt(amount+2);
-    setAmt(d.kind==='open'&&MODE!=='ind'?Math.max(d.minTo,Math.min(d.maxTo,(d.ch&&d.ch.source?d.ch.source.raiseTo:10)+d.callers*BB)):d.minTo);
+    setAmt(d.ch&&d.ch.source?Math.max(d.minTo,Math.min(d.maxTo,d.ch.source.raiseTo)):d.kind==='open'&&MODE!=='ind'?Math.max(d.minTo,Math.min(d.maxTo,10+d.callers*BB)):d.minTo);
   } else p.appendChild(idleBox());
 }
 function setAmt(v,typing,fromSlider){
