@@ -459,6 +459,7 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
     <div class="settings-row"><span id="theme-label">Тёмная тема</span><button class="themesw" id="theme" type="button" role="switch" aria-labelledby="theme-label"><i class="sw-ic sw-sun"></i><i class="sw-ic sw-moon"></i><b class="sw-knob"></b></button></div>
     <div class="settings-row"><span id="sound-label">Звуки игры</span><button class="settings-toggle" id="sndbtn" type="button" aria-pressed="true" aria-labelledby="sound-label">Вкл</button></div>
     <div class="settings-row"><span id="music-label">Музыка</span><button class="settings-toggle" id="musbtn" type="button" aria-pressed="false" aria-labelledby="music-label">Выкл</button></div>
+    <p class="hint" id="settings-status" role="status" aria-live="polite"></p>
   </dialog>
   <div class="modesrow">
   <div class="seg" id="modes">
@@ -2507,7 +2508,7 @@ function askConfirm(title,text,yes,cb){
 $('#restart').onclick=()=>askConfirm('Начать тест заново?','Сыгранные раздачи этого теста не попадут в профиль. Потом можно выбрать другой стол.','Рестарт',()=>{ RUN=null; RS=null; idle(); updScore(); });
 const curTheme=()=>document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
 function syncTheme(){ const d=curTheme()==='dark', b=$('#theme'); b.setAttribute('aria-checked',d); b.title=b.ariaLabel='Тёмная тема'; }
-$('#theme').onclick=()=>{ const t=curTheme()==='dark'?'light':'dark', R=document.documentElement; R.classList.add('themeanim'); R.dataset.theme=t; setTimeout(()=>R.classList.remove('themeanim'),350); try{ localStorage.setItem('mp-theme',t); }catch(e){} syncTheme(); };
+$('#theme').onclick=()=>{ const t=curTheme()==='dark'?'light':'dark', R=document.documentElement; R.classList.add('themeanim'); R.dataset.theme=t; setTimeout(()=>R.classList.remove('themeanim'),350); try{ localStorage.setItem('mp-theme',t); }catch(e){} syncTheme(); changeAccountSettings({theme:t}); };
 syncTheme();
 $('#players').onchange=e=>{ N=+e.target.value; save(); idle(); };
 document.addEventListener('keydown',e=>{
@@ -2658,10 +2659,10 @@ function showAuth(mode){
   authErr(null,' '); $('#autherr').textContent='';
   authUpd(); $('#alogin').focus({preventScroll:true});
 }
-function showApp(){
+function showApp(response){
   $('#auth').hidden=true; $('#app').hidden=false;
   if(AUTH){ S.player=AUTH.login; save(); }
-  RUN=null; idle(); updScore();
+  RUN=null; idle(); updScore(); activateAccountSettings(response);
 }
 function authUpd(){ const ok=$('#alogin').value.trim()&&$('#apass').value; $('#abtn-login').disabled=!ok; if(AMODE==='reg') $('#abtn-reg').disabled=!ok; else $('#abtn-reg').disabled=false; }
 $('#alogin').oninput=$('#apass').oninput=e=>{ if(e.target.getAttribute('aria-invalid')==='true'){ e.target.setAttribute('aria-invalid','false'); if(!document.querySelector('.authcard [aria-invalid="true"]')) $('#autherr').textContent=''; } authUpd(); };
@@ -2672,7 +2673,7 @@ async function authSubmit(action){
     if(ll<2||ll>25) return authErr('login_format'); if(pl<4||pl>25) return authErr('password_format'); }
   ABUSY=true; const btn=action==='register'?$('#abtn-reg'):$('#abtn-login'), txt=btn.textContent; btn.disabled=true; btn.textContent='Подождите…'; $('#autherr').textContent='';
   try{ const r=await api(action,{login,password});
-    if(r&&r.ok){ AUTH={token:r.token,login:r.login}; try{ localStorage.setItem(AKEY,JSON.stringify(AUTH)); }catch(e){} $('#apass').value=''; showApp(); }
+    if(r&&r.ok){ AUTH={token:r.token,login:r.login}; try{ localStorage.setItem(AKEY,JSON.stringify(AUTH)); }catch(e){} $('#apass').value=''; showApp(r); }
     else authErr(r&&r.error); }
   catch(e){ $('#autherr').textContent='Нет связи с сервером. Проверь интернет и попробуй ещё раз.'; }
   finally{ ABUSY=false; btn.textContent=txt; authUpd(); }
@@ -2680,7 +2681,7 @@ async function authSubmit(action){
 $('#authform').onsubmit=e=>{ e.preventDefault(); authSubmit(AMODE==='reg'?'register':'login'); };
 $('#abtn-reg').onclick=()=>{ if(AMODE==='reg') authSubmit('register'); else showAuth('reg'); };
 $('#abtn-back').onclick=()=>showAuth('login');
-function doLogout(){ const t=AUTH&&AUTH.token; AUTH=null; try{ localStorage.removeItem(AKEY); }catch(e){} if(t) api('logout',{token:t}).catch(()=>{}); RUN=null; PS=null; showAuth('login'); }
+async function doLogout(skipSettings){ const state=ACCOUNT_PREFS; if(!skipSettings&&state){ if(state.request) await state.request.catch(()=>{}); if(state===ACCOUNT_PREFS&&state.ready) await saveAccountSettings(state); } detachAccountSettings(); const t=AUTH&&AUTH.token; AUTH=null; try{ localStorage.removeItem(AKEY); }catch(e){} if(t) api('logout',{token:t}).catch(()=>{}); RUN=null; PS=null; showAuth('login'); }
 $('#logout').onclick=()=>{
   const ov=document.createElement('div'); ov.className='sheet'; ov.id='sheet';
   const card=document.createElement('div'); card.className='sheetcard confirm'; card.setAttribute('role','dialog'); card.setAttribute('aria-modal','true');
@@ -2777,7 +2778,7 @@ function openProfile(){
   for(const b of card.querySelectorAll('#pper button')) b.onclick=()=>{ PPER=b.dataset.p; draw(); };
   draw();
   api('stats',{token:AUTH&&AUTH.token}).then(r=>{
-    if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); doLogout(); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
+    if(!r||!r.ok){ if(r&&r.error==='auth'){ close(); doLogout(true); $('#autherr').textContent=AERR.auth; return; } throw new Error(); }
     R=r; st='ok'; draw(); }).catch(()=>{ st='err'; draw(); });
   const pt=card.querySelector('.ptests');
   api('tests',{token:AUTH&&AUTH.token}).then(r=>{
@@ -2795,25 +2796,133 @@ function openProfile(){
     for(const [k,n] of [['last300',300],['last100',100]]){ const x=d.slice(-n); HNP[k]=x.length; HTP[k]=histType(x); } hst='ok'; draw(); }).catch(()=>{ hst='err'; draw(); });
 }
 $('#score').onclick=e=>{ if(e.target.id==='profbtn') openProfile(); };
-// звуки игры (по умолчанию включены, выбор запоминается) и фоновая музыка (по умолчанию выключена)
+// Настройки аккаунта: сервер — источник сохранённого выбора, локальная копия — для быстрого входа и работы без связи.
+const PREF_DEFAULTS={felt:'green',theme:'system',sound:true,music:false};
+function prefPatch(value){
+  const out={}; if(!value||typeof value!=='object') return out;
+  if(['green','blue','red','purple'].includes(value.felt)) out.felt=value.felt;
+  if(['system','light','dark'].includes(value.theme)) out.theme=value.theme;
+  for(const k of ['sound','music']) if(typeof value[k]==='boolean') out[k]=value[k];
+  return out;
+}
+function legacyPrefs(){
+  const value={...PREF_DEFAULTS};
+  try{ Object.assign(value,prefPatch({felt:localStorage.getItem('mp-felt'),theme:localStorage.getItem('mp-theme'),sound:localStorage.getItem('pc-sound')!=='off',music:localStorage.getItem('mp-music')==='on'})); }catch(_){}
+  return value;
+}
+let LOCAL_PREFS=legacyPrefs(), ACCOUNT_PREFS=null, MUSIC_WANTED=false;
+function prefStatus(message){ const el=$('#settings-status'); if(el) el.textContent=message; }
+function cachePrefs(state){
+  try{ localStorage.setItem('mp-settings:'+state.key,JSON.stringify({value:state.value,dirty:state.dirty})); localStorage.setItem('mp-settings-owner',state.key); }catch(_){}
+}
+function musicUI(){ const b=$('#musbtn'); b.setAttribute('aria-pressed',MUSIC_WANTED); b.textContent=MUSIC_WANTED?'Вкл':'Выкл'; }
+function resumeMusic(){
+  const audio=$('#bgm'); if(!MUSIC_WANTED||!audio.paused) return;
+  audio.volume=.35; const p=audio.play(); if(p&&p.catch) p.catch(()=>{}); // Выбор сохраняется даже при запрете автозапуска браузером.
+}
+function applyPrefs(value){
+  const p={...PREF_DEFAULTS,...prefPatch(value)}, root=document.documentElement;
+  LOCAL_PREFS=p; root.dataset.felt=p.felt;
+  if(p.theme==='system') delete root.dataset.theme; else root.dataset.theme=p.theme;
+  SND.on=p.sound; MUSIC_WANTED=p.music;
+  if(!p.music) $('#bgm').pause(); else resumeMusic();
+  syncTheme(); syncFelt(); sndUI(); musicUI();
+  try{ localStorage.setItem('mp-felt',p.felt); if(p.theme==='system') localStorage.removeItem('mp-theme'); else localStorage.setItem('mp-theme',p.theme); localStorage.setItem('pc-sound',p.sound?'on':'off'); localStorage.setItem('mp-music',p.music?'on':'off'); }catch(_){}
+}
+function changeAccountSettings(patch){
+  patch=prefPatch(patch); const state=ACCOUNT_PREFS;
+  if(!state){ applyPrefs({...LOCAL_PREFS,...patch}); return; }
+  state.seq++; Object.assign(state.value,patch); Object.assign(state.dirty,patch);
+  applyPrefs(state.value); cachePrefs(state); prefStatus('Сохраняю…');
+  clearTimeout(state.timer); state.timer=setTimeout(()=>saveAccountSettings(state),350);
+}
+function receivePrefs(state,server){
+  state.hasServer=server!=null;
+  state.value={...(server==null?state.value:{...PREF_DEFAULTS,...prefPatch(server)}),...state.dirty};
+  state.ready=true; state.retry=0; applyPrefs(state.value); cachePrefs(state);
+  if(!state.hasServer||Object.keys(state.dirty).length) saveAccountSettings(state);
+  else prefStatus('Сохранено в аккаунте');
+}
+async function loadAccountSettings(state){
+  if(state!==ACCOUNT_PREFS||state.loading||state.saving) return;
+  state.loading=true; const seq=state.seq, first=!state.ready;
+  try{
+    const result=await api('me',{token:state.token}); if(state!==ACCOUNT_PREFS) return;
+    if(!result||!result.ok){ if(result&&result.error==='auth'){ doLogout(true); $('#autherr').textContent=AERR.auth; return; } throw Error('settings'); }
+    // Не заменять более свежий выбор ответом на старый фоновый запрос.
+    if(first||state.seq===seq) receivePrefs(state,result.settings);
+  }catch(_){ if(state===ACCOUNT_PREFS){ prefStatus('Нет связи. Сохраним при подключении.'); schedulePrefRetry(state); } }
+  finally{ state.loading=false; }
+}
+function schedulePrefRetry(state){
+  clearTimeout(state.timer); state.retry=Math.min((state.retry||0)+1,4);
+  state.timer=setTimeout(()=>{ if(state!==ACCOUNT_PREFS) return; if(state.ready) saveAccountSettings(state); else loadAccountSettings(state); },Math.min(30000,2000*2**state.retry));
+}
+async function saveAccountSettings(state){
+  if(state!==ACCOUNT_PREFS||!state.ready||state.saving) return;
+  const initialize=!state.hasServer, patch={...(initialize?state.value:state.dirty)};
+  if(!Object.keys(patch).length) return;
+  state.saving=true; prefStatus('Сохраняю…');
+  try{
+    state.request=api('settings',{token:state.token,settings:patch,initialize});
+    const result=await state.request; if(state!==ACCOUNT_PREFS) return;
+    if(!result||!result.ok){ if(result&&result.error==='auth'){ doLogout(true); $('#autherr').textContent=AERR.auth; return; } throw Error('settings'); }
+    state.hasServer=true; state.retry=0;
+    for(const k of Object.keys(patch)) if(state.dirty[k]===patch[k]&&(!initialize||result.settings[k]===patch[k])) delete state.dirty[k];
+    state.value={...PREF_DEFAULTS,...prefPatch(result.settings),...state.dirty};
+    applyPrefs(state.value); cachePrefs(state);
+    prefStatus(Object.keys(state.dirty).length?'Сохраняю…':'Сохранено в аккаунте');
+  }catch(_){ if(state===ACCOUNT_PREFS){ prefStatus('Нет связи. Сохраним при подключении.'); schedulePrefRetry(state); } }
+  finally{
+    state.saving=false; state.request=null;
+    if(state===ACCOUNT_PREFS&&state.retry===0&&Object.keys(state.dirty).length){ clearTimeout(state.timer); state.timer=setTimeout(()=>saveAccountSettings(state),100); }
+  }
+}
+function activateAccountSettings(response){
+  if(!AUTH) return;
+  if(ACCOUNT_PREFS) clearTimeout(ACCOUNT_PREFS.timer);
+  const key=AUTH.login.trim().toLowerCase(); let cached=null, owner=null;
+  try{ cached=JSON.parse(localStorage.getItem('mp-settings:'+key)||'null'); owner=localStorage.getItem('mp-settings-owner'); }catch(_){}
+  const initial=cached?{...PREF_DEFAULTS,...prefPatch(cached.value)}:(!owner||owner===key?{...LOCAL_PREFS}:{...PREF_DEFAULTS});
+  const state={key,token:AUTH.token,value:initial,dirty:prefPatch(cached&&cached.dirty),seq:0,ready:false,hasServer:false,saving:false,loading:false,retry:0,timer:null};
+  ACCOUNT_PREFS=state; applyPrefs(state.value); prefStatus('Загружаю настройки…');
+  if(response&&Object.prototype.hasOwnProperty.call(response,'settings')) receivePrefs(state,response.settings);
+  else loadAccountSettings(state);
+}
+function detachAccountSettings(){
+  const state=ACCOUNT_PREFS; if(state){ clearTimeout(state.timer); cachePrefs(state); }
+  ACCOUNT_PREFS=null; MUSIC_WANTED=false; $('#bgm').pause(); musicUI();
+}
+function beaconSettings(){
+  const s=ACCOUNT_PREFS; if(!s||!s.ready||!Object.keys(s.dirty).length||!navigator.sendBeacon) return;
+  const body=JSON.stringify({action:'settings',token:s.token,settings:s.dirty});
+  navigator.sendBeacon(ENDPOINT,new Blob([body],{type:'text/plain;charset=utf-8'}));
+}
+window.addEventListener('pagehide',beaconSettings);
+window.addEventListener('online',()=>{ const s=ACCOUNT_PREFS; if(!s) return; clearTimeout(s.timer); if(s.ready&&(!s.hasServer||Object.keys(s.dirty).length)) saveAccountSettings(s); else loadAccountSettings(s); });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) beaconSettings(); else { const s=ACCOUNT_PREFS; if(s&&!s.saving&&!Object.keys(s.dirty).length) loadAccountSettings(s); } });
+document.addEventListener('pointerdown',resumeMusic);
+document.addEventListener('keydown',resumeMusic);
+
+// Звук и музыка связаны с настройками аккаунта.
 const sndUI=()=>{ const b=$('#sndbtn'); b.setAttribute('aria-pressed',SND.on); b.textContent=SND.on?'Вкл':'Выкл'; };
-$('#sndbtn').onclick=()=>{ SND.on=!SND.on; try{ localStorage.setItem('pc-sound',SND.on?'on':'off'); }catch(_){} sndUI(); if(SND.on){ sndCtx(); sndTurn(); } };
+$('#sndbtn').onclick=()=>{ SND.on=!SND.on; try{ localStorage.setItem('pc-sound',SND.on?'on':'off'); }catch(_){} sndUI(); changeAccountSettings({sound:SND.on}); if(SND.on){ sndCtx(); sndTurn(); } };
 sndUI();
-$('#musbtn').onclick=()=>{ const a=$('#bgm'), b=$('#musbtn'), on=b.getAttribute('aria-pressed')!=='true';
-  a.volume=.35; if(on){ b.setAttribute('aria-pressed',true); b.textContent='Вкл'; const p=a.play(); if(p&&p.catch) p.catch(()=>{ b.setAttribute('aria-pressed',false); b.textContent='Выкл'; }); } else { a.pause(); b.setAttribute('aria-pressed',false); b.textContent='Выкл'; } };
+$('#musbtn').onclick=()=>changeAccountSettings({music:!MUSIC_WANTED});
+applyPrefs(LOCAL_PREFS);
 const settingsDialog=$('#settings-dialog');
-$('#settingsbtn').onclick=()=>settingsDialog.showModal();
+$('#settingsbtn').onclick=()=>{ settingsDialog.showModal(); const s=ACCOUNT_PREFS; if(s&&!s.ready) loadAccountSettings(s); };
 $('#settings-close').onclick=()=>settingsDialog.close();
 let settingsBackdrop=false;
 settingsDialog.addEventListener('pointerdown',e=>{ settingsBackdrop=e.target===settingsDialog&&outsideSettings(e); });
 function outsideSettings(e){ const r=settingsDialog.getBoundingClientRect(); return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom; }
 settingsDialog.addEventListener('click',e=>{ if(settingsBackdrop&&e.target===settingsDialog&&outsideSettings(e)) settingsDialog.close(); settingsBackdrop=false; });
 function syncFelt(){ const f=document.documentElement.dataset.felt||'green'; document.querySelectorAll('.felt-option').forEach(b=>b.setAttribute('aria-pressed',b.dataset.felt===f)); }
-document.querySelectorAll('.felt-option').forEach(b=>{ b.onclick=()=>{ document.documentElement.dataset.felt=b.dataset.felt; try{ localStorage.setItem('mp-felt',b.dataset.felt); }catch(e){} syncFelt(); }; });
+document.querySelectorAll('.felt-option').forEach(b=>{ b.onclick=()=>{ document.documentElement.dataset.felt=b.dataset.felt; try{ localStorage.setItem('mp-felt',b.dataset.felt); }catch(e){} syncFelt(); changeAccountSettings({felt:b.dataset.felt}); }; });
 syncFelt();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',syncTheme);
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
-if(AUTH){ showApp(); api('me',{token:AUTH.token}).then(r=>{ if(r&&r.ok===false&&r.error==='auth'){ doLogout(); $('#autherr').textContent=AERR.auth; } }).catch(()=>{}); }
+if(AUTH) showApp();
 else showAuth('login');
 </script>
 
