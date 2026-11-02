@@ -1133,7 +1133,7 @@ function setAmt(v,typing,fromSlider){
   const d=curDec(H), MX=d.maxTo; v=Math.round(v||0); if(!typing) v=Math.max(d.minTo,Math.min(MX,v));
   amount=v; const sl=$('#slider'), inp=$('#amt'), rb=$('#a-raise');
   if(sl){ const c=Math.max(d.minTo,Math.min(MX,v)), t=Math.sqrt((c-d.minTo)/Math.max(1,MX-d.minTo)); if(!fromSlider) sl.value=Math.round(t*1000); sl.style.setProperty('--fill',(fromSlider?+sl.value/10:t*100)+'%'); } if(inp&&!typing) inp.value=v;
-  const ok=v>=d.minTo&&v<=MX; if(rb){ rb.disabled=!ok; rb.querySelector('small').textContent= ok?(v>=MX?`${v}\nолл-ин`:d.post?(d.curBet?`до ${v}\n${bbs(v)} ББ`:`${v}\n${Math.round(v/d.pot*100)}% банка`):`до ${v}\n${bbs(v)} ББ`):`от ${d.minTo}\n `; } // всегда две строки: кнопка не меняет размер
+  const ok=v>=d.minTo&&v<=MX; if(rb){ rb.disabled=!ok; rb.querySelector('small').textContent=ok?(d.post&&!d.curBet?String(v):`до ${v}`):`от ${d.minTo}`; } // на кнопке только сумма, без дополнительных строк
 }
 
 // ===================== review =====================
