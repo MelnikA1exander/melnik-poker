@@ -75,7 +75,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .rail{position:absolute;inset:7% 6% 9% 6%;border-radius:999px;background:var(--rail);padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .felt{width:100%;height:100%;border-radius:999px;
   background:radial-gradient(ellipse farthest-side at 50% 46%,var(--felt-2) 0%,var(--felt) 65%,color-mix(in srgb,var(--felt) 66%,#000) 100%);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.68),inset 0 0 8px 2px rgba(255,255,255,.42),inset 0 0 24px 5px rgba(255,255,255,.18),0 0 7px rgba(255,255,255,.18);
+  box-shadow:inset 0 0 0 1px rgba(255,220,190,.68),inset 0 0 8px 2px rgba(255,220,190,.42),inset 0 0 24px 5px rgba(255,220,190,.18),0 0 7px rgba(255,220,190,.18);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--felt-ink)}
 .board{display:flex;gap:5px}
 .potline{font:600 12px var(--f-mono);background:rgba(0,0,0,.28);padding:3px 10px;border-radius:999px;font-variant-numeric:tabular-nums}
@@ -395,7 +395,7 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 .felt-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .felt-option{display:grid;justify-items:center;gap:8px;padding:10px 2px;border:1px solid transparent;border-radius:12px;background:var(--sunk);color:var(--muted);font:500 11px var(--f-body);cursor:pointer}
 .felt-option[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
-.felt-swatch{display:grid;place-items:center;width:42px;height:32px;border-radius:50%;background:radial-gradient(ellipse farthest-side at 50% 46%,var(--swatch-light),var(--swatch) 65%,color-mix(in srgb,var(--swatch) 66%,#000));color:#fff;font:700 20px var(--f-body);box-shadow:inset 0 0 0 1px #ffffff80,inset 0 0 5px 1px #ffffff50}
+.felt-swatch{display:grid;place-items:center;width:42px;height:32px;border-radius:50%;background:radial-gradient(ellipse farthest-side at 50% 46%,var(--swatch-light),var(--swatch) 65%,color-mix(in srgb,var(--swatch) 66%,#000));color:#fff;font:700 20px var(--f-body);box-shadow:inset 0 0 0 1px #ffdcbe80,inset 0 0 5px 1px #ffdcbe50}
 .felt-swatch::after{content:'✓';visibility:hidden}.felt-option[aria-pressed="true"] .felt-swatch::after{visibility:visible}
 .settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 0;border-top:1px solid var(--line);font-weight:500}
 .settings-toggle{min-width:74px;min-height:36px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--sunk);color:var(--muted);font:600 13px var(--f-body);cursor:pointer}
