@@ -448,6 +448,12 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 #personal-content,.personal-grid-list,.personal-card .gridblock{min-width:0}#personal-content>.controls{flex-wrap:wrap;justify-content:flex-start;margin:12px 0}#personal-content .gridwrap{min-width:0;width:100%}#personal-content .range-matrix{min-width:0}.premium-tag{font-size:9px;border:1px solid currentColor;border-radius:4px;padding:1px 3px;margin-left:4px;text-transform:uppercase}.personal-tabs{flex-wrap:wrap}
 
 .pt-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0}.pt-actions button{min-width:95px;min-height:46px}.personal-training-filters{display:grid;gap:16px}.pt-check{display:flex;gap:10px;align-items:center;line-height:1.4}.pt-check input{accent-color:var(--orange);width:18px;height:18px}.personal-training-filters[hidden]{display:none!important}.personal-training-filters select{max-width:65%}body:has(#s-ind[aria-pressed="true"]) #table .seat .pos{font-size:11px}@media(max-width:520px){body:has(#s-ind[aria-pressed="true"]) #table .seat:not(.hero){width:80px}body:has(#s-ind[aria-pressed="true"]) #table .seat:not(.hero) .pos{font-size:9px}}
+
+/* Session toolbar */
+.ctl2{justify-content:space-between;gap:12px;min-height:40px;flex-wrap:nowrap}.ctl2 #sessline{margin:0;margin-right:auto;padding:9px 13px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:12px;line-height:1.3;cursor:default;min-width:0}.ctl2 #sessline:empty{visibility:hidden}.ctl2 #training-filters-button{margin-left:auto;flex-shrink:0}.playcontrols:has(>#restart[hidden]){display:none}.ctl2 #sessline b{font-weight:700}
+
+/* Profile mode selector */
+.profile-mode-filter{flex-wrap:wrap;gap:8px;margin:14px 0}.profile-mode-filter select{max-width:100%;min-height:38px}.profile-personal-content p{line-height:1.5}.pt-prior{margin-top:12px}.pt-prior summary{cursor:pointer;padding:10px;border:1px solid var(--line);border-radius:10px}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -723,7 +729,7 @@ const LABELS={8:['UTG','UTG+1','LJ','HJ','CO','BTN','SB','BB'],9:['UTG','UTG+1',
 let STACK=400; const BB=4, SBA=2;
 const stackFor=()=>MODE==='ind'?500:400;
 let N=8;
-const lab=i=>LABELS[N][i];
+const lab=i=>personalTraining()?PT_POS[i]:LABELS[N][i];
 const btnIdx=()=>N-3;
 const dist=i=>btnIdx()-i; // 0 = BTN; для блайндов отрицательное
 const isSB=i=>i===N-2, isBB=i=>i===N-1;
@@ -788,7 +794,7 @@ function setupHand(){ STACK=stackFor();
   return h;
 }
 const active=h=>h.players.filter(p=>!p.folded);
-function decisionFor(h,p){
+function decisionFor(h,p){ if(h.personalFlow)return petDecision(h,p);
   const pl=h.players[p], toCall=h.curBet-pl.bet, L=h.level;
   let ch,kind,ip=false,g=null,pos=null;
   if(L===0){ if(isBB(p)){ ch=BBISO; kind='bbiso'; } else { ch=MODE!=='ind'&&STACK===400&&!h.callers?openChart(rfiKey(p)):RFI[rfiKey(p)]; kind='open'; } }
@@ -808,7 +814,7 @@ function allowedFor(d,c){
   const base={R:['R'],C:['C'],F:['F'],RC:['R','C'],RF:['R','F'],CF:['C','F'],RCF:['R','C','F']}[c];
   return new Set(base.map(a=>{ if(a==='R'&&!d.canRaise) return d.toCall>0?'C':'X'; if(d.toCall<=0&&(a==='F'||a==='C')) return 'X'; return a; }));
 }
-function sizeBands(d){
+function sizeBands(d){if(d.personalSize)return {sizes:[d.personalSize],best:[d.personalSize,d.personalSize],ok:[d.personalSize,d.personalSize],txt:String(d.personalSize)};
   if(d.sizeOverride) return d.sizeOverride;
   if(d.ch&&(d.ch.source||d.ch.reference)&&!(d.callers||0)){const sizes=sourceSizes(d),v=sizes[0];return {sizes,best:[v,v],ok:[v,v],txt:sizes.map(x=>(x/BB).toLocaleString('ru-RU')+' ББ ('+x+')').join(' или ')+(d.ch.source?' по выбранному решению':' — приближённый ориентир')};}
   const P=d.curBet, c=d.callers;
@@ -841,7 +847,7 @@ function apply(h,p,a,amt){
   snap(h);
 }
 // вес руки для выбранного действия в текущей точке (1 — всегда так, 0,5 — микс, 0 — никогда)
-function weightFn(h,p,a,amt){
+function weightFn(h,p,a,amt){ if(h.personalFlow)return petWeight(h,p,a);
   if(p===h.hero||MODE!=='ind'){ const d=p===h.hero?heroDec(h):decisionFor(h,p); return hh=>{ const al=allowedFor(d,cls(d.ch,hh)), fq=d.ch.f&&d.ch.f[hh];
     const src=d.ch.source||d.ch.reference;
     if(a==='R'&&fq&&src&&src.jam){const j=src.jam[hh]||0;return amt>=STACK?j:amt===src.raiseTo?Math.max(0,fq[0]-j):0;}
@@ -889,7 +895,7 @@ function openRange(p){
   ov.onclick=e=>{ if(e.target===ov) close(); }; card.querySelector('#sheet-close').onclick=close;
   card.querySelector('#sheet-close').focus({preventScroll:true});
 }
-function plusBtn(p){ const b=document.createElement('button'); b.className='plus'; b.id='plus-'+p; b.type='button'; b.textContent='+'; b.setAttribute('aria-label','Показать диапазон'); b.onclick=e=>{ e.stopPropagation(); openRange(p); }; return b; }
+function plusBtn(p){ const b=document.createElement('button'); b.className='plus'; b.id='plus-'+p; b.type='button'; b.textContent='+'; b.setAttribute('aria-label','Показать диапазон'); b.onclick=e=>{ e.stopPropagation(); if(H&&H.personalFlow&&p===H.hero){ptHint();return;} openRange(p); }; return b; }
 function botAct(h,p){
   if(MODE==='ind'){ indBotAct(h,p); return; }
   const d=decisionFor(h,p), hh=h.players[p].h, c=cls(d.ch,hh);
@@ -954,7 +960,7 @@ function newHand(){
 }
 
 // ===================== hero decisions =====================
-function heroAct(a,amt){
+function heroAct(a,amt){ if(personalTraining()&&H&&H.personalFlow)return petAct(a,amt);
   const h=H; if(ANIM||IDLE||!h||h.over||h.toAct[0]!==h.hero) return;
   if(h.street>0) return pheroAct(a,amt);
   const d=heroDec(h); const pl=h.players[h.hero];
@@ -1128,7 +1134,7 @@ function sndLog(h){ const root=h.anim?Object.getPrototypeOf(h):h, L=h.log.length
 function sndHeroTurn(h){ const k=h.street+':'+h.log.length; if(SND.hand===h&&SND.turn===k) return; SND.turn=k; sndTurn(); }
 // ===================== rendering =====================
 function seatXY(k){ const ang=Math.PI/2+k*2*Math.PI/N; const rx=window.innerWidth<520?38:44; return [50+rx*Math.cos(ang),50+41*Math.sin(ang)]; }
-function render(){ renderTable(); if(H.over) renderEnd(); else renderActions(); }
+function render(){ if(H&&H.personalFlow)return petRender(); renderTable(); if(H.over) renderEnd(); else renderActions(); }
 function renderTable(h=H){
   const t=$('#table'); t.innerHTML=''; try{ sndLog(h); }catch(e){}
   const lastA=h.log.length?h.log[h.log.length-1].p:null;
@@ -1143,7 +1149,7 @@ function renderTable(h=H){
   for(const p of h.players){
     const i=p.i, k=(i-h.hero+N)%N, [x,y]=seatXY(k);
     const s=document.createElement('div'); s.className='seat'; s.style.left=x+'%'; s.style.top=y+'%';
-    if(i===h.hero){ s.classList.add('hero'); const hd=document.createElement('div'); hd.className='hand'; p.cards.forEach(c=>hd.appendChild(cardEl(c,'big'))); if(h.over&&!REC) hd.appendChild(plusBtn(i)); if(h.over&&!REC&&h.eqRange!=null&&h.eq){ const e=document.createElement('span'); e.className='eq'; e.title='Твоё эквити против диапазонов соперников'; e.textContent=pctS(h.eqRange); s.appendChild(e); } s.appendChild(hd); }
+    if(i===h.hero){ s.classList.add('hero'); const hd=document.createElement('div'); hd.className='hand'; p.cards.forEach(c=>hd.appendChild(cardEl(c,'big'))); if(h.over&&!REC||h.personalFlow&&!h.anim&&PT_OPTIONS.hints) hd.appendChild(plusBtn(i)); if(h.over&&!REC&&h.eqRange!=null&&h.eq){ const e=document.createElement('span'); e.className='eq'; e.title='Твоё эквити против диапазонов соперников'; e.textContent=pctS(h.eqRange); s.appendChild(e); } s.appendChild(hd); }
     else if(!p.folded){ const mini=document.createElement('div'); mini.className='mini';
       if(h.over&&h.lines&&h.lines[i]){ p.cards.forEach(c=>mini.appendChild(cardEl(c,'up'))); if(!REC) mini.appendChild(plusBtn(i)); if(!REC&&h.eqVill&&h.eqVill[i]!=null){ const e=document.createElement('span'); e.className='eq'; e.title='Эквити его диапазона против твоей руки'; e.textContent='диапазон '+pctS(h.eqVill[i]); s.appendChild(e); } }
       else for(let j=0;j<2;j++){ const b=document.createElement('div'); b.className='pc back'; mini.appendChild(b); }
@@ -1152,7 +1158,7 @@ function renderTable(h=H){
     if(!h.over&&h.toAct[0]===i) s.classList.add('turn');
     const pod=document.createElement('div'); pod.className='pod';
     pod.innerHTML='<div class="pos"></div><div class="stk"></div>';
-    pod.firstChild.textContent=i===h.hero?`${lab(i)} · ты`:(NAMES()?prof(h,i).name:lab(i));
+    pod.firstChild.textContent=i===h.hero?`${lab(i)} · ${h.personalFlow?prof(h,i).name:"ты"}`:(NAMES()?prof(h,i).name:lab(i));
     if(NAMES()&&i!==h.hero){ const pp=document.createElement('div'); pp.className='pp'; pp.textContent=lab(i); pod.insertBefore(pp,pod.lastChild); } pod.lastChild.textContent=String(left(p));
     if(p.tag&&i===lastA&&!h.over){ const ab=document.createElement('div'); const tg=p.tag.toLowerCase(); ab.className='actb '+(p.folded?'f':/^колл|^лимп/.test(tg)?'c':/^чек/.test(tg)?'':'r')+(i===lastA?' new':''); ab.textContent=p.tag; pod.appendChild(ab); }
     s.appendChild(pod); t.appendChild(s);
@@ -1173,8 +1179,8 @@ function renderTable(h=H){
   if(h.over&&h.eq&&h.outcome!=='win'&&!REC){ const nm=i=>i===h.hero?'ты':(NAMES()?prof(h,i).name:lab(i)); txt+=`<br><b>Твоя рука против ${Object.keys(h.eq).length>2?'их диапазонов':'его диапазона'}: ${h.eqRange!=null?pctS(h.eqRange):'—'}</b>${h.outcome==='fold'?' (если бы ты остался в банке)':''}${h.board.length<5&&Object.keys(h.eq).length?`<br>Против конкретных рук: ${Object.keys(h.eq).map(i=>`${nm(+i)} ${pctS(h.eq[i])}`).join(' · ')}`:''}`; }
   $('#log').innerHTML=txt;
 }
-function fixedSizesMode(d){return !d.post&&MODE!=='ind'&&['prof','pre'].includes(GAME);}
-function fixedRaiseOptions(d){
+function fixedSizesMode(d){if(personalTraining()&&H&&H.personalFlow)return true;return !d.post&&MODE!=='ind'&&['prof','pre'].includes(GAME);}
+function fixedRaiseOptions(d){if(d.personalSize)return d.canRaise?[d.personalSize]:[];
  if(!d.canRaise)return [];
  const s=d.ch&&(d.ch.source||d.ch.reference),mx=d.maxTo||STACK;
  if(s){const out=[Math.min(mx,Math.max(d.minTo,s.raiseTo))];if(s.jam&&Object.values(s.jam).some(v=>v>=.001)&&!out.includes(mx))out.push(mx);return out;}
@@ -1256,7 +1262,7 @@ function explainBase(x){
   const d=x.d, c=x.c, hh=prettyHand(x.h);
   const r=rangePct(d.ch,['R','RC','RF']), cc=rangePct(d.ch,['C','RC','CF']);
   if(d.ch.reference)return prettyHand(x.h)+': '+d.ch.reference.reason+' Это ориентир для обучения, без подтверждённой оценки EV.';
-  if(d.ch.source){const fv=d.ch.f[x.h]||[0,0], labels=[['рейз',fv[0]-(d.ch.source.jam&&d.ch.source.jam[x.h]||0)],['олл-ин',d.ch.source.jam&&d.ch.source.jam[x.h]||0],['колл'+(d.kind==='open'?' (лимп)':''),fv[1]],['фолд',Math.max(0,1-fv[0]-fv[1])]];return prettyHand(x.h)+': '+labels.filter(([,v])=>v>=.001).map(([k,v])=>k+' '+(100*v).toLocaleString('ru-RU',{maximumFractionDigits:2})+'%').join(', ')+'. Источник: GTO Wizard, 8-max, 100 ББ, без рейка и анте. '+(d.kind==='open'&&isSB(d.p)?'В этой модели SB может лимпить или открываться на 3 ББ. ':'')+'Частоты округлены в интерфейсе источника; EV действий не выгружены.';}
+  if(d.ch.source){const fv=d.ch.f[x.h]||[0,0], labels=[['рейз',fv[0]-(d.ch.source.jam&&d.ch.source.jam[x.h]||0)],['олл-ин',d.ch.source.jam&&d.ch.source.jam[x.h]||0],['колл'+(d.kind==='open'?' (лимп)':''),fv[1]],['фолд',Math.max(0,1-fv[0]-fv[1])]];return prettyHand(x.h)+': '+labels.filter(([,v])=>v>=.001).map(([k,v])=>k+' '+(100*v).toLocaleString('ru-RU',{maximumFractionDigits:0})+'%').join(', ')+'. Источник: GTO Wizard, 8-max, 100 ББ, без рейка и анте. '+(d.kind==='open'&&isSB(d.p)?'В этой модели SB может лимпить или открываться на 3 ББ. ':'')+'Частоты округлены в интерфейсе источника; EV действий не выгружены.';}
   if(d.kind==='open'){
     const base=`Диапазон опена с ${lab(d.p)} ≈ ${rangePct(d.ch,['R','RF'])}% рук${isSB(d.p)?' (из SB рейз или фолд)':''}.${d.callers?' Перед тобой лимп: рейзим тем же диапазоном, размер +1 ББ за лимпера.':''}`;
     if(c==='R') return `${hh} входит в диапазон опена. ${base} Первым в банк только рейз, без лимпа.`;
@@ -1520,7 +1526,7 @@ const IND_RFI={
   0:chart({R:'22+, A2s+, K2s+, Q4s+, J6s+, T6s+, 95s+, 85s+, 74s+, 63s+, 53s+, 43s, A5o+, K9o+, Q9o+, J9o+, T9o, 98o', RF:'Q3s, Q2s, J5s, 84s, A4o, A3o, A2o, K8o, Q8o, J8o, T8o, 87o'}),
   SB:chart({R:'22+, A2s+, K5s+, Q7s+, J7s+, T7s+, 96s+, 86s+, 75s+, 64s+, 54s, A8o+, KTo+, QTo+, JTo', RF:'K4s, Q6s, 85s, 53s, A7o, A6o, A5o, K9o, Q9o, J9o, T9o'}),
 };
-function heroDec(h){
+function heroDec(h){ if(h.personalFlow)return petDecision(h,h.hero);
   const d=decisionFor(h,h.hero); if(MODE!=='ind'||REC) return d; // в профиле оцениваем по GTO
   const p=h.hero, L=h.level;
   if(L===0 && h.callers===0 && !isBB(p)){
@@ -2575,7 +2581,7 @@ function renderResults(){ syncRun();
 function recExport(){ return JSON.stringify(S.recs||[]); }
 
 // ===================== flow =====================
-function next(){ if(personalTraining())return ptNext(); if(REC&&(!RUN||RUN.hands.length>=PROF_N)) return idle(); IDLE=false; newHand(); play(); updScore(); }
+function next(){ if(personalTraining())return petNew(); if(REC&&(!RUN||RUN.hands.length>=PROF_N)) return idle(); IDLE=false; newHand(); play(); updScore(); }
 let IDLE=true;
 function idle(){ if(personalTraining())return ptIdle(); syncRun();
   clearTimeout(ANIM); ANIM=null; IDLE=true; if(BACK){ H=BACK.cur; H.backUsed=true; BACK=null; }
@@ -2672,7 +2678,7 @@ function openHelp(){
 }
 $('#help').onclick=openHelp;
 let STYLE='gto';
-function setMode(m){ STYLE=m; MODE=REC?'gto':m; S.mode=m; save(); $('#s-gto').setAttribute('aria-pressed',m==='gto'); $('#s-ind').setAttribute('aria-pressed',m==='ind'); }
+function setMode(m){ if(m!=='ind'&&typeof petLeave==='function')petLeave(); STYLE=m; MODE=REC?'gto':m; S.mode=m; save(); $('#s-gto').setAttribute('aria-pressed',m==='gto'); $('#s-ind').setAttribute('aria-pressed',m==='ind'); }
 $('#s-gto').onclick=()=>{ setMode('gto'); ptRefreshUi(); updScore(); renderStats(); idle(); };
 // Personal mode is server-authorized, not unlocked by repeated taps.
 $('#s-ind').onclick=()=>{if(!personalOwner()||GAME!=='pre')return;setMode('ind');ptRefreshUi();$('#training-filters').close();idle();};
@@ -2714,7 +2720,7 @@ $('#m-rng').onclick=()=>showRanges(true);
 // Personal study draft: 10-max / 125 BB / 4 BB. Not a solver solution.
 let PERSONAL_VIEW=false;
 let PERSONAL_DATA=null,PERSONAL_LOADING=false;
-function personalOwner(){return !!(AUTH&&AUTH.token&&AUTH.login.trim().toLowerCase()==='мельник');}
+function personalOwner(){return !!(AUTH&&AUTH.token&&['мельник','машулька'].includes(AUTH.login.trim().toLowerCase()));}
 function personalRefresh(){
  if(typeof ptRefreshUi==='function')ptRefreshUi();
  const owner=personalOwner(),button=$('#rng-personal');
@@ -2740,30 +2746,31 @@ function personalRender(){
  const note=document.createElement('p');note.className='rnghint';
  note.textContent='Мои основные диапазоны · 10 игроков · 125 ББ · блайнды 2/4 · опен до 16 · без рейка.';box.append(note);
  const ctl=document.createElement('div');ctl.className='controls';
- for(const [value,label] of [['open','Open'],['vs','Raise/Call'],['polar','Полярный 3-бет'],['guide','Как применять']]){
+ for(const [value,label] of [['open','Open'],['vs','Raise/Call'],['linear','Линейный 3-бет'],['polar','Полярный 3-бет'],['continuations','Продолжения'],['guide','Как применять']]){
   const b=document.createElement('button');b.className='rngtab personal-action';b.textContent=label;b.type='button';b.setAttribute('aria-pressed',String(value===PERSONAL_ACTION));b.onclick=()=>{PERSONAL_ACTION=value;personalRender();};ctl.append(b);
  }box.append(ctl);
  if(PERSONAL_ACTION==='guide'){
   const p=document.createElement('div');p.className='personal-guide';
-  const sections=[['Основа','Материалы Литтла адаптированы вручную под 10-max, 125 ББ и открытие 4 ББ. Это рабочая база без расчёта точного EV. Диапазоны не зависят автоматически от имени соперника.'],['Open','Все до нас выбросили. На UTG–BTN — рейз до 16 или фолд. На SB отдельно показаны рейз до 16, лимп до 4 и фолд. После чужого лимпа или рейза используем другие ситуации.'],['Raise/Call','Один опен до 16 без лимперов и коллеров. Выбираем позицию рейзера и свою позицию. Размер 3-бета: ориентир до 48 в позиции, до 64 без позиции; BB против SB — до 48. Против другого размера или нескольких участников диапазоны требуют поправки.'],['Когда подходит полярный 3-бет','Против достаточно широкого опена игрока, который фолдит на 3-беты. Во вкладке заполнены все пары позиций; это условные альтернативы, а не обязательный выбор. Сильные руки рейзим на велью, часть одномастных тузов используем как блеф, подходящие средние руки оставляем в колле. Нужны разумные ожидания фолдов, а не просто страшная карта или имя соперника.'],['Когда лучше основная стратегия','Против цепких коллеров, узких ранних открытий и при неопределённом профиле предпочитаем основную таблицу. Фолды игрока на ривере не доказывают фолды на 3-бет. После колд-колла другого игрока это уже сквиз; эти таблицы его не описывают.'],['Дешёвый вход в мультивей','Колл или оверлимп с мелкой парой, одномастным тузом или коннектором — отдельная стратегия, а не блефовая часть полярного 3-бета. Нужны позиция, подходящая цена, эффективные стеки и возможность добрать. Слабая разномастная рука не становится хорошей только из-за мультивея. Отдельные таблицы против лимперов ещё не добавлены.'],['Лимиты профилей','Наблюдения о друзьях — тенденции. Игроки за спиной могут получить сильные руки. Крупная ставка не раскрывает карты. При сомнении опираемся на общую базу и доступную информацию.']];
+  const sections=[['Основа','Материалы Литтла адаптированы вручную под 10-max, 125 ББ и открытие 4 ББ. Это рабочая база без расчёта точного EV. Диапазоны не зависят автоматически от имени соперника.'],['Open','Все до нас выбросили. На UTG–BTN — рейз до 16 или фолд. На SB отдельно показаны рейз до 16, лимп до 4 и фолд. После чужого лимпа или рейза используем другие ситуации.'],['Raise/Call','Один опен до 16 без лимперов и коллеров. Выбираем позицию рейзера и свою позицию. Размер 3-бета: ориентир до 48 в позиции, до 64 без позиции; BB против SB — до 48. Против другого размера или нескольких участников диапазоны требуют поправки.'],['Когда подходит полярный 3-бет','Против достаточно широкого опена игрока, который фолдит на 3-беты. Доступны все пары позиций; на поздних позициях против широкого открытия такая стратегия обычно уместнее, чем против раннего узкого диапазона. Сильные руки рейзим на велью, часть одномастных тузов используем как блеф, подходящие средние руки оставляем в колле. Нужны разумные ожидания фолдов, а не просто страшная карта или имя соперника.'],['Когда лучше основная стратегия','Против цепких коллеров, узких ранних открытий и при неопределённом профиле предпочитаем основную таблицу. Фолды игрока на ривере не доказывают фолды на 3-бет. После колд-колла другого игрока это уже сквиз: смотри раздел «Продолжения» и фактическую цену.'],['Дешёвый вход в мультивей','Колл или оверлимп с мелкой парой, одномастным тузом или коннектором — отдельная стратегия, а не блефовая часть полярного 3-бета. Нужны позиция, подходящая цена, эффективные стеки и возможность добрать. Слабая разномастная рука не становится хорошей только из-за мультивея. Лимпы, изоляция, сквизы и ответы на 3-/4-бет показаны в разделе «Продолжения» и используются в тренировке.'],['Лимиты профилей','Наблюдения о друзьях — тенденции. Маша и Пивко за спиной могут получить сильные руки. Крупная ставка не раскрывает карты. При сомнении опираемся на общую базу и доступную информацию.']];
   for(const [title,text]of sections){const h=document.createElement('h3');h.textContent=title;const q=document.createElement('p');q.textContent=text;p.append(h,q);}
   const refs=document.createElement('p');refs.textContent='Литтл: ';for(const [title,url]of [['5 Preflop Tips — с 15:27','https://www.youtube.com/watch?v=ZKwlQdT6m00&t=927s'],['Preflop & Postflop HACKS — с 7:11','https://www.youtube.com/watch?v=Imfz_Cj1uVM&t=431s']]){const a=document.createElement('a');a.textContent=title;a.href=url;a.target='_blank';a.rel='noopener';refs.append(a,document.createTextNode(' · '));}p.append(refs);box.append(p);return;
  }
- if(PERSONAL_ACTION==='vs'||PERSONAL_ACTION==='polar'){
+ if(PERSONAL_ACTION==='continuations'){petContinuationCharts(box);return;}
+ if(PERSONAL_ACTION==='vs'||PERSONAL_ACTION==='polar'||PERSONAL_ACTION==='linear'){
   const polar=PERSONAL_ACTION==='polar';
   const label=document.createElement('label');label.textContent='Опен до 16 с позиции ';const select=document.createElement('select');select.setAttribute('aria-label','Персональные: позиция рейзера');
   const positions=[...Object.keys(PERSONAL_DATA.open),'SB'];if(!positions.includes(PERSONAL_OPENER))PERSONAL_OPENER=positions[0];for(const pos of positions){const o=document.createElement('option');o.value=pos;o.textContent=pos;select.append(o);}select.value=PERSONAL_OPENER;select.onchange=()=>{PERSONAL_OPENER=select.value;personalRender();};label.append(select);box.append(label);
   const p=document.createElement('p');p.className='rnghint';p.textContent=polar?'Условная альтернатива для всех позиций: только против достаточно широкого опена и подтверждённых избыточных фолдов на 3-бет. Особенно осторожно против раннего открытия и без позиции. Против станции или неизвестного игрока — основная таблица. Без коллеров.':'Один опен до 16, без лимперов и коллеров. 3-бет: до 48 в позиции, до 64 без позиции; BB против SB — до 48. Под другие размеры нужна поправка.';box.append(p);
-  const list=document.createElement('div');list.className='personal-grid-list';for(const [key,spec]of Object.entries(polar?PERSONAL_DATA.polar:PERSONAL_DATA.vs)){if(!key.startsWith(PERSONAL_OPENER+'>'))continue;const ch=chart(spec);for(const h of ch.R)ch.C.delete(h);const card=document.createElement('article');card.className='personal-card';const title=document.createElement('h3');title.textContent=key.split('>')[1]+' против '+PERSONAL_OPENER;card.append(title,gridEl({d:{ch,kind:'vsopen'},h:null}));card.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>3-бет</span><span><i style="background:var(--call)"></i>колл</span><span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';list.append(card);}box.append(list);return;
+  const list=document.createElement('div');list.className='personal-grid-list';for(const [key,spec]of Object.entries(polar?PERSONAL_DATA.polar:PERSONAL_ACTION==='linear'?PERSONAL_DATA.linear:PERSONAL_DATA.vs)){if(!key.startsWith(PERSONAL_OPENER+'>'))continue;const ch=chart(spec);for(const h of ch.R)ch.C.delete(h);const card=document.createElement('article');card.className='personal-card';const title=document.createElement('h3');title.textContent=key.split('>')[1]+' против '+PERSONAL_OPENER;card.append(title,gridEl({d:{ch,kind:'vsopen'},h:null}));card.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>3-бет</span><span><i style="background:var(--call)"></i>колл</span>'+(ch.CF.size?'<span><i style="background:linear-gradient(135deg,var(--call) 50%,var(--fold) 50%)"></i>колл / фолд по условиям</span>':'')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';const origin=document.createElement('p');origin.className='hint';origin.textContent=spec.source&&spec.source.kind==='little-position-specific'?'Литтл: '+spec.source.pair+', стр. '+spec.source.page+'. Размеры адаптированы.':'Дополнительная ранняя позиция 10-max: адаптированный состав; пограничные коллы отмечены диагональю.';card.append(origin);list.append(card);}box.append(list);return;
  }
  const hint=document.createElement('p');hint.className='rnghint';hint.textContent='Все до тебя выбросили: красный — рейз до 16, серый — фолд. SB: зелёный — лимп до 4. Если перед тобой лимп или рейз, эти таблицы не применяются.';box.append(hint);
  const list=document.createElement('div');list.className='personal-grid-list';
  for(const [pos,text] of [...Object.entries(PERSONAL_DATA.open),['SB',null]]){
   const card=document.createElement('article');card.className='personal-card';
-  const title=document.createElement('h3');const ch=chart(pos==='SB'?PERSONAL_DATA.sb:{R:text});title.textContent=pos+' · Open до 16 · ≈ '+rangePct(ch,['R'])+'%'+(pos==='SB'?' · лимп ≈ '+rangePct(ch,['C'])+'%':'');
+  const title=document.createElement('h3');const ch=chart(pos==='SB'?PERSONAL_DATA.sb:{R:text,RF:PERSONAL_DATA.openBorder&&PERSONAL_DATA.openBorder[pos]});title.textContent=pos+' · Open до 16 · '+(pos==='SB'?'рейз ≈ '+rangePct(ch,['R'])+'% · лимп ≈ '+rangePct(ch,['C'])+'%':'ядро '+rangePct(ch,['R'])+'% · до '+rangePct(ch,['R','RF'])+'%');
   card.append(title,gridEl({d:{ch,kind:'open'},h:null}));
   // A draft without mixed actions needs only its two actual legend entries.
-  card.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>рейз до 16</span>'+(pos==='SB'?'<span><i style="background:var(--call)"></i>лимп до 4</span>':'')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';
+  card.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>рейз до 16</span>'+(pos==='SB'?'<span><i style="background:var(--call)"></i>лимп до 4</span>':'<span><i style="background:linear-gradient(135deg,var(--raise) 50%,var(--fold) 50%)"></i>рейз / фолд по условиям</span>')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';
   list.append(card);
  }box.append(list);
 }
@@ -2823,8 +2830,8 @@ function authErr(code,text){ $('#autherr').textContent=text||AERR[code]||'Не �
   const f=AFIELD[code]||[]; for(const id of ['alogin','apass']) $('#'+id).setAttribute('aria-invalid',f.includes(id)?'true':'false');
   if(f.length) $('#'+f[0]).focus({preventScroll:true}); }
 function showAuth(mode){
-  PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};
   if(STYLE==='ind')setMode('gto');
+  PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};
   if($('#training-filters').open)$('#training-filters').close();
   PERSONAL_VIEW=false; PERSONAL_DATA=null; $('#personal-content').replaceChildren();
   AMODE=mode||'login';
@@ -2941,6 +2948,7 @@ function openProfile(){
   const HTP={last300:null,last100:null}, HNP={last300:0,last100:0},HST={last300:null,last100:null}; let hst='load';
   card.innerHTML='<div class="sheethead"><div><div class="ctx">Префлоп профиль игрока</div><p class="pname"></p></div><button class="xbtn" id="sheet-close" aria-label="Закрыть">✕</button></div><div class="seg" id="pper"><button type="button" data-p="last300">Последние 300 раздач</button><button type="button" data-p="last100">Последние 100 раздач</button></div><h2 class="ptype2" id="ptype"></h2><div id="pxy"></div><div class="pcards"></div><p class="hint" id="pnote"></p><p class="ptitle">Последние тесты</p><div class="ptests"><p class="hint">Загружаю…</p></div>';
   card.querySelector('.pname').textContent=AUTH?AUTH.login:'';
+  petProfileTools(card);
   ov.appendChild(card); document.body.appendChild(ov);
   const close=()=>ov.remove(); ov.onclick=e=>{ if(e.target===ov) close(); }; card.querySelector('#sheet-close').onclick=close;
   const cards=card.querySelector('.pcards'), note=card.querySelector('#pnote'); let R=null, st='load';
@@ -3110,7 +3118,7 @@ function setupTrainingFilters(){
  for(const id of ['training-filters-close','training-filters-done'])$('#'+id).onclick=()=>dialog.close();
  dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
 }
-// A separate one-decision preflop trainer. Never writes into GTO sessions.
+// A separate one-decision preflop trainer. Legacy helpers and isolated personal state.
 function personalTraining(){return GAME==='pre'&&STYLE==='ind'&&personalOwner();}
 function ptElement(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
 function ptGrid(q){const block=gridEl({d:{ch:q.ch,kind:q.kind},h:q.hand});block.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>'+(q.kind==='open'?'рейз до 16':'3-бет')+'</span>'+((q.kind!=='open'||q.heroPos==='SB')?'<span><i style="background:var(--call)"></i>'+(q.kind==='open'?'лимп до 4':'колл')+'</span>':'')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';return block;}
@@ -3123,31 +3131,32 @@ function ptRefreshUi(){
  if(!owner){PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};}
 }
 async function ptLoad(){
- if(!personalTraining()||PT.loading)return;const token=AUTH.token;PT.loading=true;
+ if(!personalTraining()||PT.loading)return;const token=AUTH.token;PT.loading=true;PT.loadAttempted=true;
  try{
   if(!PERSONAL_DATA){const r=await api('personalRanges',{token});if(!r||!r.ok||!r.data)throw Error('ranges');if(!personalTraining()||AUTH.token!==token)return;PERSONAL_DATA=r.data;}
   const owner=AUTH.login.trim().toLowerCase();if(PT.owner!==owner){PT.owner=owner;try{const local=JSON.parse(localStorage.getItem(ptKey())||'{}');PT.rows=Array.isArray(local.rows)?local.rows:[];PT.pending=Array.isArray(local.pending)?local.pending:[];if(local.options)PT_OPTIONS=Object.assign(PT_OPTIONS,local.options);}catch(e){}}
+  PT.loaded=true;PT.loading=false;ptFilterValues();if(personalTraining()&&!PT.question)ptIdle();
   const r=await api('personalHistory',{token});if(!personalTraining()||AUTH.token!==token)return;
   if(r&&r.ok&&Array.isArray(r.dec)){const map=new Map([...r.dec,...PT.rows].map(d=>[d.id,d]));PT.rows=[...map.values()].sort((a,b)=>a.t-b.t).slice(-500);PT.status='Синхронизировано';}else PT.status='История сохранена на устройстве';
   PT.loaded=true;ptPersist();ptFilterValues();ptFlush();
  }catch(e){if(personalTraining())PT.status='Нет связи. Нажми «Повторить загрузку».';}
  finally{PT.loading=false;}
- if(personalTraining())ptIdle();
+ if(personalTraining()){if(!PT.question)ptIdle();else ptStats();}
 }
 function ptFilterValues(){const r=$('#pt-random'),h=$('#pt-hints'),s=$('#pt-strategy');if(r)r.checked=PT_OPTIONS.random;if(h)h.checked=PT_OPTIONS.hints;if(s)s.value=PT_OPTIONS.strategy;}
 function ptSetupFilters(){
  const fields=ptElement('div','personal-training-filters');fields.id='personal-training-filters';fields.hidden=true;
  fields.append(ptElement('p','hint','Персональная игра: 10 игроков · 125 ББ · опен до 16.'));
  for(const [id,label,key]of [['pt-random','Случайная рассадка в каждой задаче','random'],['pt-hints','Разрешить подсказку диапазона','hints']]){const l=ptElement('label','pt-check');const input=document.createElement('input');input.type='checkbox';input.id=id;input.checked=PT_OPTIONS[key];input.onchange=()=>{PT_OPTIONS[key]=input.checked;ptPersist();if(PT.question&&!PT.question.done)ptDraw();};l.append(input,document.createTextNode(label));fields.append(l);}
- const l=ptElement('label','sizesel','Стратегия '),select=document.createElement('select');select.id='pt-strategy';for(const [v,t]of [['base','Основная'],['polar','Полярный 3-бет — заданное условие']]){const o=document.createElement('option');o.value=v;o.textContent=t;select.append(o);}select.onchange=()=>{PT_OPTIONS.strategy=select.value;ptPersist();};l.append(select);fields.append(l,ptElement('p','hint','Позиции выбираются общим фильтром. При полярной стратегии задача явно предполагает подходящие фолды на 3-бет; это не утверждение о реальном игроке.'));
+ const l=ptElement('label','sizesel','Стратегия '),select=document.createElement('select');select.id='pt-strategy';for(const [v,t]of [['base','База Литтла'],['linear','Линейный 3-бет — против широких коллов'],['polar','Полярный 3-бет — при избыточных фолдах']]){const o=document.createElement('option');o.value=v;o.textContent=t;select.append(o);}select.onchange=()=>{PT_OPTIONS.strategy=select.value;ptPersist();};l.append(select);fields.append(l,ptElement('p','hint','Позиции выбираются общим фильтром. Альтернативные стратегии предполагают указанные условия, а не гарантируют поведение игрока. Торговля продолжается до флопа, фолда или олл-ина.'));
  $('#training-filter-fields').append(fields);ptRefreshUi();
 }
 function ptIdle(){
  if(!personalTraining())return;clearTimeout(ANIM);ANIM=null;H=null;IDLE=true;PT.question=null;ptRefreshUi();$('#stats').hidden=false;
  $('#table').replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt');felt.append(ptElement('p','potline','Персональный префлоп · 125 ББ'));rail.append(felt);$('#table').append(rail);
- const b=ptElement('button','startbtn',PERSONAL_DATA?(PT.loaded?'Начать персональную раздачу':'Загружаем историю…'):'Загрузить персональные диапазоны');b.id='start';b.type='button';b.disabled=PT.loading;b.onclick=()=>{if(!PERSONAL_DATA||!PT.loaded)ptLoad();else ptNext();};$('#table').append(b);
- $('#panel').replaceChildren();$('#log').textContent='Одна задача — одно префлоп-решение. Статистика отдельно от GTO. '+PT.status;
- ptStats();if(!PT.loaded&&!PT.loading)ptLoad();
+ const b=ptElement('button','startbtn','Начать раздачу');b.id='start';b.type='button';b.disabled=PT.loading||!PT.loaded||!PERSONAL_DATA;b.onclick=ptNext;$('#table').append(b);
+ idlePanel();$('#log').textContent='10 игроков · 125 ББ · опен до 16. '+PT.status;
+ ptStats();if(!PT.loaded&&!PT.loading&&!PT.loadAttempted)ptLoad();else if(!PT.loaded&&!PT.loading){const retry=ptElement('button','linkbtn','Повторить загрузку');retry.type='button';retry.onclick=ptLoad;$('#panel').append(retry);}
 }
 function ptSampleHand(ch){
  const groups={R:[],C:[],F:[]};for(const h of ALL169){const action=cls(ch,h);for(let n=0;n<combos(h);n++)groups[action].push(h);}const options=Object.values(groups).filter(g=>g.length),pool=options[Math.floor(Math.random()*options.length)];return pool[Math.floor(Math.random()*pool.length)];
@@ -3162,31 +3171,38 @@ function ptNext(){
  const ch=chart(spec),hand=ptSampleHand(ch),players=PERSONAL_DATA.players.map(x=>({...x}));
  if(PT_OPTIONS.random)for(let i=players.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[players[i],players[j]]=[players[j],players[i]];}
  const seatOf=i=>(i-hi+10)%10;
- PT.question={id:'pt-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10),t:Date.now(),rv:PERSONAL_DATA.version,kind,hi,oi,heroPos,openerPos,rangeMode,ch,hand,cards:ptCards(hand),players,openerName:oi==null?null:players[seatOf(oi)].name,expected:cls(ch,hand),assisted:false,done:false,randomSeating:PT_OPTIONS.random};
- H=null;IDLE=false;ptDraw();
+ PT.question={id:'pt-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10),t:Date.now(),rv:PERSONAL_DATA.version,kind,hi,oi,heroPos,openerPos,rangeMode,ch,hand,cards:ptCards(hand),players,openerName:oi==null?null:players[seatOf(oi)].name,expected:cls(ch,hand),assisted:false,done:false,randomSeating:PT_OPTIONS.random,revealedUntil:-1,animating:true};
+ H=null;IDLE=false;clearTimeout(ANIM);ptDraw();sndChips();const q=PT.question;
+ if(window.NOANIM){q.revealedUntil=q.hi-1;q.animating=false;ptDraw();sndTurn();}else ANIM=setTimeout(()=>ptAnimate(q),400);
 }
+function ptAnimate(q){if(PT.question!==q||!personalTraining())return;if(q.revealedUntil<q.hi-1){q.revealedUntil++;if(q.revealedUntil===q.oi)sndChips();else sndFold();ptDraw();ANIM=setTimeout(()=>ptAnimate(q),400);}else{ANIM=null;q.animating=false;ptDraw();sndTurn();}}
+function ptRaiseTo(q){return q.kind==='open'?16:q.hi>=8&&!(q.hi===9&&q.oi===8)?64:48;}
+function ptInvestment(q,pi){let bet=pi===8?2:pi===9?4:0;if(pi===q.oi&&q.revealedUntil>=q.oi)bet=16;if(pi===q.hi&&q.done){if(q.action==='R')bet=ptRaiseTo(q);else if(q.action==='C')bet=q.kind==='open'?4:16;}return bet;}
+function ptPot(q){let pot=0;for(let pi=0;pi<10;pi++)pot+=ptInvestment(q,pi);return pot;}
 function ptDraw(){
  const q=PT.question;if(!q||!personalTraining())return;
- const t=$('#table');t.replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt'),pot=q.kind==='open'?6:q.oi===8?20:22;
+ const t=$('#table');t.replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt'),pot=ptPot(q);
  felt.append(ptElement('p','potline','Банк '+pot+' · 10 игроков · 125 ББ'));rail.append(felt);t.append(rail);
  for(let seat=0;seat<10;seat++){
-  const pi=(q.hi+seat)%10,pos=PT_POS[pi],player=q.players[seat],folded=seat!==0&&(q.kind==='open'?pi<q.hi:pi<q.hi&&pi!==q.oi),a=Math.PI/2+seat*2*Math.PI/10,rx=innerWidth<520?38:44;
-  const s=ptElement('div','seat'+(seat===0?' hero turn':'')+(folded?' folded':''));s.style.left=(50+rx*Math.cos(a))+'%';s.style.top=(50+41*Math.sin(a))+'%';
-  if(seat===0){const hand=ptElement('div','hand');q.cards.forEach(c=>hand.append(cardEl(c,'big')));if(PT_OPTIONS.hints||q.done){const b=ptElement('button','plus','+');b.type='button';b.setAttribute('aria-label','Показать мой диапазон');b.onclick=ptHint;hand.append(b);}s.append(hand);}
+  const pi=(q.hi+seat)%10,pos=PT_POS[pi],player=q.players[seat],folded=seat!==0&&pi<=q.revealedUntil&&(q.kind==='open'?pi<q.hi:pi<q.hi&&pi!==q.oi),a=Math.PI/2+seat*2*Math.PI/10,rx=innerWidth<520?38:44;
+  const x=50+rx*Math.cos(a),y=50+41*Math.sin(a);
+  const s=ptElement('div','seat'+(seat===0?' hero'+(!q.animating&&!q.done?' turn':''):'')+(folded?' folded':''));s.style.left=x+'%';s.style.top=y+'%';
+  if(seat===0){const hand=ptElement('div','hand');q.cards.forEach(c=>hand.append(cardEl(c,'big')));if(PT_OPTIONS.hints||q.done){const b=ptElement('button','plus','+');b.type='button';b.disabled=q.animating;b.setAttribute('aria-label','Показать мой диапазон');b.onclick=ptHint;hand.append(b);}s.append(hand);}
   else if(!folded){const mini=ptElement('div','mini');mini.append(ptElement('div','pc back'),ptElement('div','pc back'));s.append(mini);}
-  const bet=pi===q.oi?16:pi===8?2:pi===9?4:0,pod=ptElement('div','pod');pod.append(ptElement('div','pos',seat===0?pos+' · ты':player.name),ptElement('div','pp',seat===0?'Саша':pos),ptElement('div','stk',500-bet));if(pi===q.oi)pod.append(ptElement('div','actb r','Рейз до 16'));s.append(pod);t.append(s);
+  const bet=ptInvestment(q,pi),pod=ptElement('div','pod');pod.append(ptElement('div','pos',seat===0?pos+' · ты':player.name),ptElement('div','pp',seat===0?'Саша':pos),ptElement('div','stk',500-bet));if(pi===q.oi&&q.revealedUntil>=q.oi)pod.append(ptElement('div','actb r'+(q.animating&&q.revealedUntil===pi?' new':''),'Рейз до 16'));if(seat===0&&q.done)pod.append(ptElement('div','actb '+(q.action==='R'?'r':q.action==='C'?'c':'f')+' new',ptActionWord(q.action,q)));s.append(pod);t.append(s);
+  if(bet>0){const chip=ptElement('div','bet',String(bet)),fraction=seat===0?.42:.36;chip.style.left=(x+(50-x)*fraction)+'%';chip.style.top=(y+(50-y)*fraction)+'%';chip.setAttribute('aria-label',pos+' поставлено '+bet);t.append(chip);}
   if(pi===7){const d=ptElement('div','dealer','D');d.style.left=(50+rx*.78*Math.cos(a))+'%';d.style.top=(50+31*Math.sin(a))+'%';t.append(d);}
  }
  const context=q.kind==='open'?'Все до тебя выбросили.':q.openerName+' ('+q.openerPos+') открывает до 16. До тебя остальные выбросили.';
- $('#log').textContent=context+(q.rangeMode==='polar'?' Условие задачи: рейзер достаточно широко открывается и избыточно фолдит на 3-беты.':' Основная стратегия.');
+ $('#log').textContent=q.animating?'Префлоп · действия до твоего хода…':context+(q.rangeMode==='polar'?' Условие задачи: рейзер достаточно широко открывается и избыточно фолдит на 3-беты.':' Основная стратегия.');
  const panel=$('#panel');panel.replaceChildren();
- if(!q.done){const actions=ptElement('div','pt-actions');for(const action of ['F','C','R']){if(action==='C'&&q.kind==='open'&&q.heroPos!=='SB')continue;const b=ptElement('button','helpbtn',ptActionWord(action,q));b.type='button';b.onclick=()=>ptAnswer(action);actions.append(b);}panel.append(actions,ptElement('p','hint','Персональная база · ответ оценивается по диапазону, а не по предполагаемым картам соперника.'));}
+ if(!q.done){const actions=ptElement('div','actions');for(const [action,style,label]of [['F','fold','Фолд'],['X','check','Чек'],['C','call',q.kind==='open'&&q.heroPos==='SB'?'Лимп':'Колл'],['R','raise',q.kind==='open'?'Рейз':'3-бет']]){const b=ptElement('button','act '+style);b.id={F:'a-fold',X:'a-check',C:'a-call',R:'a-raise'}[action];b.type='button';b.disabled=q.animating||action==='X'||action==='C'&&q.kind==='open'&&q.heroPos!=='SB';b.append(ptElement('span','lbl',label));if(['C','R'].includes(action)){const amount=action==='R'?'до '+ptRaiseTo(q):q.kind==='open'?(q.heroPos==='SB'?'2':''):String(16-(q.hi===9?4:q.hi===8?2:0));b.append(ptElement('small','',amount));}b.onclick=()=>ptAnswer(action);actions.append(b);}panel.append(actions,ptElement('p','hint','Персональная база · ответ оценивается по диапазону, а не по предполагаемым картам соперника.'));}
  else{const b=ptElement('button','next','Следующая раздача ↵');b.type='button';b.id='next';b.onclick=ptNext;panel.append(b);const result=ptElement('section','verdict');result.append(ptElement('h3','',q.correct?'Верно':'Разберём решение'),ptElement('p','',q.hand+' · твой ответ: '+ptActionWord(q.action,q)+' · база: '+ptActionWord(q.expected,q)),ptElement('p','',ptReason(q)));if(q.assisted)result.append(ptElement('p','hint','Диапазон был открыт до ответа: результат учтён отдельно, с подсказкой.'));
   const target=q.oi==null?q.players[(q.hi===7?1:10-q.hi+7)%10]:q.players[(q.oi-q.hi+10)%10];result.append(ptElement('p','hint','Тенденция игрока — '+target.name+': '+target.note+' Это контекст для адаптации, не обязательная смена базового ответа.'));
   result.append(ptGrid(q));panel.append(result);
  }ptStats();
 }
-function ptActionWord(action,q){if(action==='F')return 'Фолд';if(action==='C')return q.kind==='open'?'Лимп до 4':'Колл '+(16-(q.hi===9?4:q.hi===8?2:0));return q.kind==='open'?'Рейз до 16':'3-бет до '+(q.hi>=8&&!(q.hi===9&&q.oi===8)?64:48);}
+function ptActionWord(action,q){if(action==='F')return 'Фолд';if(action==='C')return q.kind==='open'?'Лимп до 4':'Колл '+(16-(q.hi===9?4:q.hi===8?2:0));return q.kind==='open'?'Рейз до 16':'3-бет до '+ptRaiseTo(q);}
 function ptReason(q){
  if(q.expected==='F')return 'Рука вне выбранного диапазона продолжения. При цене открытия 4 ББ не добавляем колл только ради возможного попадания: учитываем доминацию, позицию и игроков за спиной. Это выбранная граница базы, не доказательство большого отрицательного EV.';
  if(q.expected==='C')return q.kind==='open'?'На SB эта рука входит в диапазон лимпа Литтла, адаптированный к нашей базе: доплачиваем до 4. Это отдельная ситуация blind versus blind, не рекомендация лимпить первым с любой позиции.':'В базе эта рука остаётся в колле: сохраняем подходящую среднюю часть диапазона, учитывая позицию и цену. Не превращаем каждый колл в обязательство продолжать на любом флопе.';
@@ -3195,12 +3211,160 @@ function ptReason(q){
  return 'Рука входит в сильную часть диапазона 3-бета. Повышение получает оплату от подходящих худших рук и/или ограничивает реализацию эквити. Это не обязательство выставляться на 125 ББ против любого 4-бета.';
 }
 function ptHint(){const q=PT.question;if(!q)return;if(!q.done){q.assisted=true;ptPersist();}const overlay=ptElement('div','sheet');overlay.id='sheet';const card=ptElement('div','sheetcard');card.setAttribute('role','dialog');card.setAttribute('aria-modal','true');const head=ptElement('div','sheethead');head.append(ptElement('h3','',q.heroPos+(q.openerPos?' против '+q.openerPos:' · Open')));const close=ptElement('button','xbtn','✕');close.type='button';close.setAttribute('aria-label','Закрыть диапазон');close.onclick=()=>overlay.remove();head.append(close);card.append(head,ptGrid(q));overlay.append(card);overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};document.body.append(overlay);close.focus();}
-function ptAnswer(action){const q=PT.question;if(!q||q.done||!personalTraining())return;q.done=true;q.action=action;q.correct=action===q.expected;const d={id:q.id,t:q.t,rv:q.rv,kind:q.kind,heroPos:q.heroPos,openerPos:q.openerPos,openerName:q.openerName,hand:q.hand,action,expected:q.expected,correct:q.correct,assisted:q.assisted,rangeMode:q.rangeMode,seating:q.players.map(p=>p.name),randomSeating:q.randomSeating};PT.rows.push(d);PT.rows=PT.rows.slice(-500);PT.pending.push(d);PT.status='Сохраняем…';ptPersist();ptDraw();ptFlush();}
+function ptAnswer(action){const q=PT.question;if(!q||q.done||q.animating||!['F','C','R'].includes(action)||!personalTraining())return;if(action==='F')sndFold();else sndChips();q.done=true;q.action=action;q.correct=action===q.expected;const d={id:q.id,t:q.t,rv:q.rv,kind:q.kind,heroPos:q.heroPos,openerPos:q.openerPos,openerName:q.openerName,hand:q.hand,action,expected:q.expected,correct:q.correct,assisted:q.assisted,rangeMode:q.rangeMode,seating:q.players.map(p=>p.name),randomSeating:q.randomSeating};PT.rows.push(d);PT.rows=PT.rows.slice(-500);PT.pending.push(d);PT.status='Сохраняем…';ptPersist();ptDraw();ptFlush();}
 async function ptFlush(){if(PT.saving||!PT.pending.length||!personalOwner())return;PT.saving=true;const token=AUTH.token,owner=PT.owner,batch=PT.pending.slice(0,50);try{const r=await api('personalSave',{token,decisions:batch});if(PT.owner!==owner||!personalOwner()||AUTH.token!==token)return;if(!r||!r.ok||!Array.isArray(r.accepted))throw Error('save');const ids=new Set(r.accepted);PT.pending=PT.pending.filter(d=>!ids.has(d.id));PT.status='Синхронизировано';ptPersist();}catch(e){PT.status='Сохранено на устройстве · повторить синхронизацию';}finally{PT.saving=false;}if(personalTraining())ptStats();if(PT.pending.length&&PT.status==='Синхронизировано')ptFlush();}
 function ptStats(){if(!personalTraining())return;const rows=PT.rows.filter(d=>d.rv===PERSONAL_DATA?.version),solo=rows.filter(d=>!d.assisted),aided=rows.filter(d=>d.assisted);const pct=a=>a.length?Math.round(a.filter(d=>d.correct).length/a.length*100)+'%':'—';$('#sessline').textContent='Персональные · без подсказок '+solo.length+' · '+pct(solo);$('#stats').hidden=false;const box=$('#statsbody');box.replaceChildren(ptElement('p','',`Последние ${rows.length} ответов текущей версии: без подсказки ${solo.length}, верно ${pct(solo)}; с подсказкой ${aided.length}, верно ${pct(aided)}.`));const errors={};for(const d of solo.filter(d=>!d.correct)){const k=d.heroPos+' · '+(d.kind==='open'?'Open':'против '+d.openerPos);errors[k]=(errors[k]||0)+1;}for(const [k,n]of Object.entries(errors).sort((a,b)=>b[1]-a[1]).slice(0,5))box.append(ptElement('p','hint',k+': ошибок '+n));const sync=ptElement('button','helpbtn',PT.status||'Синхронизировать');sync.type='button';sync.onclick=ptFlush;box.append(sync,ptElement('p','hint','В GTO-профиль эти ответы не входят. Частоты задач не оценивают частоты реальной игры.'));}
 function ptKeyboard(e){if($('#training-filters').open||$('#settings-dialog').open||['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;const sheet=document.getElementById('sheet');if(sheet){if(e.key==='Escape'||e.key==='Enter'){e.preventDefault();sheet.remove();}return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();if(!PT.question||PT.question.done)ptNext();return;}const a={f:'F','а':'F',c:'C','с':'C',r:'R','к':'R'}[e.key.toLowerCase()];if(a&&PT.question&&!PT.question.done){if(a==='C'&&PT.question.kind==='open'&&PT.question.heroPos!=='SB')return;e.preventDefault();ptAnswer(a);}}
 
+// Shared deterministic personal preflop policy, used by browser and server.
+function pcHands(text){const ranks='AKQJT98765432',out=new Set();String(text||'').split(',').forEach(raw=>{const t=raw.trim();let m;if((m=t.match(/^([AKQJT2-9])\1\+$/))){for(let i=ranks.indexOf(m[1]);i>=0;i--)out.add(ranks[i]+ranks[i]);}else if((m=t.match(/^([AKQJT2-9])\1-([AKQJT2-9])\2$/))){for(let i=Math.min(ranks.indexOf(m[1]),ranks.indexOf(m[2]));i<=Math.max(ranks.indexOf(m[1]),ranks.indexOf(m[2]));i++)out.add(ranks[i]+ranks[i]);}else if((m=t.match(/^([AKQJT2-9])([AKQJT2-9])([so])\+$/))){for(let i=ranks.indexOf(m[2]);i>ranks.indexOf(m[1]);i--)out.add(m[1]+ranks[i]+m[3]);}else if((m=t.match(/^([AKQJT2-9])([AKQJT2-9])([so])-\1([AKQJT2-9])\3$/))){for(let i=Math.min(ranks.indexOf(m[2]),ranks.indexOf(m[4]));i<=Math.max(ranks.indexOf(m[2]),ranks.indexOf(m[4]));i++)out.add(m[1]+ranks[i]+m[3]);}else if(/^[AKQJT2-9]{2}[so]?$/.test(t))out.add(t);});return out;}
+function pcSpec(input){const o={R:[...pcHands(input.R)],C:[...pcHands(input.C)],RF:[...pcHands(input.RF)],CF:[...pcHands(input.CF)]};const raise=new Set(o.R);o.C=o.C.filter(h=>!raise.has(h));o.RF=o.RF.filter(h=>!raise.has(h)&&!o.C.includes(h));o.CF=o.CF.filter(h=>!raise.has(h)&&!o.C.includes(h)&&!o.RF.includes(h));return o;}
+function pcPolicy(data,c){
+ const pos=['UTG','UTG+1','UTG+2','UTG+3','LJ','HJ','CO','BTN','SB','BB'],p=c.p,L=c.level||0,rs=c.raisers||[],op=rs[0],t3=rs[1],cur=c.curBet||4,callers=c.callers||0;
+ const inPosition=(a,b)=>(a>=8?a-10:a)>(b>=8?b-10:b),ip=op!=null&&inPosition(p,rs[rs.length-1]);
+ const map=x=>x<3?'UTG':x===3?'UTG+1':pos[x];
+ let kind,spec,size,origin='adapted',source=null;
+ if(L===0&&callers===0&&p!==9){kind='open';spec=p===8?data.sb:{R:data.open[pos[p]],RF:data.openBorder&&data.openBorder[pos[p]]};size=16;origin='personal-open';}
+ else if(L===0){kind=p===9?'bbiso':'iso';const core=pcHands(data.open[pos[Math.min(p,7)]]),strong=pcHands(p<=3?'88+,ATs+,KJs+,QJs,AQo+':p<=5?'77+,A9s+,KTs+,QTs+,JTs,AJo+,KQo':'66+,A8s+,KTs+,QTs+,JTs,ATo+,KJo+,QJo');const r=[...core].filter(h=>strong.has(h));const ccall=p>=6?'22-55,A5s-A2s,98s,87s,76s,65s,54s':p>=4?'22-66,A5s-A2s,98s,87s,76s':'';spec={R:r.join(','),C:ccall};size=16+4*callers+(p>=8?4:0);}
+ else if(L===1){kind='vsopen';spec=(c.rangeMode==='polar'&&callers===0?data.polar:c.rangeMode==='linear'?data.linear:data.vs)[pos[op]+'>'+pos[p]]||{R:'QQ+,AKs,AKo',C:'JJ,TT,AQs'};source=spec.source;size=(ip?3:4)*cur+callers*cur;if(p===9&&op===8)size=3*cur+callers*cur;
+  if(callers){kind='squeeze';const strong=pcHands(op<=3?'QQ+,AKs,AKo':'JJ+,AQs+,AKo');const allR=pcHands(spec.R);spec={R:[...allR].filter(h=>strong.has(h)).join(','),C:p<8&&ip?'22-JJ,AQs-AJs,KQs,JTs,T9s,98s,87s,76s':p===9?'55-JJ,AQs-AJs,KQs,QJs,JTs,T9s':'JJ,TT,AQs'};}
+  // Facing an unusual open price requires a separate, conservative continuation.
+  if(cur>24){const keep=pcHands('88+,AJs+,KQs,AQo+');const s=pcSpec(spec);spec={R:s.R.filter(h=>keep.has(h)).join(','),C:s.C.filter(h=>keep.has(h)).join(',')};}
+ }
+ else if(L===2&&p===op){kind='vs3b';source=data.deep&&data.deep.v3[map(p)+'>'+map(t3)];spec=source||{R:'KK+,AKs',C:'QQ,JJ,AKo,AQs'};size=Math.round(cur*(ip?2.3:2.6)/2)*2;origin=source?'little-deep-adapted':'adapted';
+  const safe=pcHands(cur>80?'TT+,AQs+,AKo':'66+,ATs+,KTs+,QTs+,JTs,T9s,AQo+');const s=pcSpec(spec);spec={R:s.R.join(','),C:s.C.filter(h=>safe.has(h)).join(',')};
+ }
+ else if(L===2){kind='cold3b';spec={R:'KK+,AKs',C:'QQ,AKo'};size=Math.round(cur*(ip?2.3:2.6)/2)*2;}
+ else if(L===3&&p===t3){kind='vs4b';source=data.deep&&data.deep.v4[map(p)+'>'+map(op)];spec=source||{R:'KK+',C:'QQ,AKs,AKo'};size=500;origin=source?'little-deep-adapted':'adapted';
+  const safe=pcHands(cur>=180?'QQ+,AKs,AKo':'TT+,AQs+,AKo');const s=pcSpec(spec);spec={R:s.R.filter(h=>safe.has(h)).join(','),C:s.C.filter(h=>safe.has(h)).join(',')};
+ }
+ else if(L===3){kind='cold4b';spec={R:'KK+',C:''};size=500;}
+ else {kind='vsjam';const price=(cur-(c.bet||0))/Math.max(1,(c.pot||0)+cur-(c.bet||0));spec={C:price>.4?'KK+':'QQ+,AKs,AKo'};size=500;}
+ if(cur>=500){kind='vsjam';const s=pcSpec(spec);spec={C:[...new Set([...s.R,...s.C])].filter(h=>pcHands('QQ+,AKs,AKo').has(h)).join(',')};size=500;}
+ if(!spec)spec={R:'KK+',C:'QQ,AKs,AKo'};
+ const result=pcSpec(spec);if(kind==='open'&&p===8)origin='little-sb';
+ size=Math.min(500,Math.max(cur+(c.lastRaise||4),Math.round(size/2)*2));if(L>=2&&size>=250)size=500;
+ return {...result,kind,raiseTo:size,origin,sourcePage:source&&source.page||null,ip};
+}
+function pcAllowed(policy,hand,toCall){let acts=policy.R.includes(hand)?['R']:policy.C.includes(hand)?['C']:policy.RF.includes(hand)?['R','F']:policy.CF.includes(hand)?['C','F']:['F'];if(toCall<=0)acts=acts.map(a=>a==='C'||a==='F'?'X':a);return [...new Set(acts)];}
+
+// Personal mode uses the same hand state, betting engine, table, sounds and animation as GTO.
+function petContext(h,p){let mode=h.personalStrategy||'base';const model=h.raisers.length&&h.prof[h.raisers[0]].model;if(mode==='polar'&&['station','wide','passive'].includes(model))mode='linear';return {p,level:h.level,curBet:h.curBet,bet:h.players[p].bet,pot:potOf(h),lastRaise:h.lastRaise,callers:h.callers,raisers:h.raisers.slice(),rangeMode:mode};}
+function petChart(s){return chart({R:s.R.join(','),C:s.C.join(','),RF:s.RF.join(','),CF:s.CF.join(',')});}
+function petDecision(h,p){const c=petContext(h,p),policy=pcPolicy(PERSONAL_DATA,c);return {p,hand:h.players[p].h,pot:c.pot,kind:policy.kind,ch:petChart(policy),toCall:Math.max(0,h.curBet-h.players[p].bet),level:h.level,ip:policy.ip,op:h.raisers[0],canRaise:h.curBet<500&&!h.players[p].allin,curBet:h.curBet,callers:h.callers,minTo:Math.min(500,h.curBet+h.lastRaise),maxTo:500,personalSize:policy.raiseTo,policy,context:c};}
+function petRoster(){const index=PERSONAL_DATA.ownerIndex||0,a=PERSONAL_DATA.players.slice(index).concat(PERSONAL_DATA.players.slice(0,index)).map(p=>({...p}));if(PT_OPTIONS.random)for(let i=a.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function petModel(h,p){const d=petDecision(h,p),m=h.prof[p].model||'base',s=d.policy,hand=h.players[p].h;let raises=new Set(s.R),calls=new Set(s.C),optional=new Set(s.RF),size=d.personalSize;
+ const tight=pcHands('66+,ATs+,KTs+,QTs+,JTs,AJo+,KQo'),premium=pcHands('JJ+,AQs+,AKo');
+ const wide=pcHands('22+,A2s+,A2o+,K2s+,K8o+,Q5s+,Q9o+,J7s+,J9o+,T7s+,T9o,97s+,98o,86s+,87o,75s+,76o,65s,54s,43s,53o,52o');
+ const station=pcHands('22+,A2s+,A2o+,K2s+,K5o+,Q2s+,Q7o+,J2s+,J7o+,T2s+,T7o+,92s+,97o+,82s+,87o,72s+,76o,62s+,65o,52s+,54o,43s,52o,92o');
+ if(h.level===0){
+  if(m==='tight'||m==='tight-passive'){raises=new Set([...raises].filter(x=>tight.has(x)));optional.clear();if(h.callers&&p>=6)calls=new Set([...pcHands('22+,A5s-A2s,JTs,T9s,98s,87s')]);}
+  else if(m==='station'||m==='passive'){raises=premium;calls=m==='station'?station:wide;optional.clear();}
+  else if(m==='aggressive'){raises=wide;calls=pcHands('22+,A2s+,K9s+,Q9s+,J9s+,T9s,98s,87s');optional.clear();}
+  else if(m==='wide'||m==='wide-aggressive'||m==='base-wide'){for(const x of optional)raises.add(x);if(m==='wide')calls=wide;}
+ }else if(h.level===1){
+  if(m==='tight'||m==='tight-passive'||m==='passive'){raises=pcHands('QQ+,AKs');calls=new Set([...calls,...pcHands('JJ,TT,AQs,AKo')]);optional.clear();}
+  else if(m==='station'){raises=pcHands('KK+,AKs');calls=d.curBet<=24?station:d.curBet<=64?pcHands('55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo'):pcHands('TT+,AQs+,AKo');optional.clear();}
+  else if(m==='aggressive'||m==='wide-aggressive'){raises=new Set([...raises,...pcHands('A5s,A4s,K9s,Q9s')]);calls=new Set([...calls,...pcHands('55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo')]);}
+  else if(m==='wide')calls=new Set([...calls,...pcHands('22+,A2s+,KTs+,QTs+,JTs,T9s,98s,AJo+,KQo')]);
+ }else if(h.level>=2){
+  if(m==='tight'||m==='tight-passive'||m==='passive'){raises=pcHands('KK+');calls=pcHands(h.curBet>160?'QQ,AKs,AKo':'JJ,QQ,AQs,AKs,AKo');optional.clear();}
+  else if(m==='station'||m==='wide'){raises=pcHands('KK+');calls=pcHands(h.curBet>160?'QQ,AKs,AKo':'88+,AQs+,AQo+');optional.clear();}
+  else if(m==='aggressive'){for(const x of pcHands('A5s,A4s'))optional.add(x);}
+ }
+ if(h.curBet>=500){raises.clear();calls=new Set([...calls].filter(x=>pcHands('QQ+,AKs,AKo').has(x)));optional.clear();}
+ return {d,raises,calls,optional,hand,size};
+}
+function petBot(h,p){const b=petModel(h,p),d=b.d,m=h.prof[p].model;let action=b.raises.has(b.hand)?'R':b.calls.has(b.hand)?(d.toCall?'C':'X'):b.optional.has(b.hand)?(Math.random()<.35?'R':d.toCall?'F':'X'):d.toCall?'F':'X';
+ if(action==='R'&&h.level===0&&((m==='wide'&&Math.random()<.5)||(m==='aggressive'&&Math.random()<.15)))action='C';
+ if(action==='R'&&!d.canRaise)action=d.toCall?'C':'X';if(action==='C'&&!d.toCall)action='X';apply(h,p,action,action==='R'?b.size:0);
+}
+function petWeight(h,p,a){const b=petModel(h,p);return hand=>a==='R'?(b.raises.has(hand)||b.optional.has(hand)?1:0):a==='C'?(b.calls.has(hand)||b.optional.has(hand)?1:0):1;}
+function petRun(h){let guard=0;while(h.toAct.length&&!h.over){if(++guard>120)throw Error('Personal betting loop');const p=h.toAct[0];if(p===h.hero)return;petBot(h,p);if(checkOver(h))return;}if(!h.over){h.over=true;h.outcome=active(h).every(p=>p.allin)?'allin':'flop';}}
+function petNew(){
+ if(!personalTraining())return;if(!PERSONAL_DATA||!PT.loaded)return ptLoad();if(PT.savedN==null)PT.savedN=N;N=10;STACK=500;clearTimeout(ANIM);ANIM=null;
+ let h;for(let attempt=0;attempt<100;attempt++){
+  const deck=shuffled(),players=[];for(let p=0;p<10;p++){const cards=[deck.pop(),deck.pop()];players.push({i:p,cards,h:hclass(cards),bet:p===8?2:p===9?4:0,folded:false,allin:false,tag:''});}
+  const choices=PT_POS.map((_,i)=>i).filter(i=>filter==='all'||filter==='EP'&&i<=3||filter==='MP'&&i>=4&&i<=5||filter==='LP'&&i>=6&&i<=7||filter==='BL'&&i>=8),hero=choices[rnd(choices.length)],roster=petRoster();
+  h={players,deck,hero,prof:Array.from({length:10},(_,p)=>roster[(p-hero+10)%10]),curBet:4,lastRaise:4,level:0,raisers:[],callers:0,toAct:[0,1,2,3,4,5,6,7,8,9],log:[],decisions:[],over:false,outcome:'',board:[],street:0,runout:deck.slice(-5),personalFlow:true,personalStrategy:PT_OPTIONS.strategy||'base',personalId:'pfp-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9),personalIndex:0};
+  H=h;FRAMES=[];snap(h);petRun(h);if(h.over)continue;const d=petDecision(h,hero),allowed=pcAllowed(d.policy,players[hero].h,d.toCall);if(allowed.length===1&&allowed[0]==='F'&&attempt<90&&Math.random()<.65)continue;break;
+ }
+ H=h;IDLE=false;if(h.over){petRender();return;}petQuestion(h);play();
+}
+function petQuestion(h){const d=petDecision(h,h.hero),p=h.players[h.hero],last=h.raisers.length?h.raisers[h.raisers.length-1]:h.log.filter(e=>e.a==='C').slice(-1)[0]?.p;PT.question={id:h.personalId+'-'+h.personalIndex,handId:h.personalId,t:Date.now(),rv:PERSONAL_DATA.version,kind:d.kind,heroPos:PT_POS[h.hero],openerPos:h.raisers.length?PT_POS[h.raisers[0]]:null,hand:p.h,cards:p.cards.slice(),ch:d.ch,d,context:d.context,policy:d.policy,allowed:pcAllowed(d.policy,p.h,d.toCall),expected:cls(d.ch,p.h),rangeMode:d.context.rangeMode,selectedStrategy:h.personalStrategy,villain:last==null?null:h.prof[last],behind:h.toAct.filter(i=>i!==h.hero&&!h.players[i].folded&&!h.players[i].allin).map(i=>({name:h.prof[i].name,pos:PT_POS[i]})),players:h.prof,assisted:false,done:false,randomSeating:PT_OPTIONS.random};}
+function petLeave(){clearTimeout(ANIM);ANIM=null;if(PT.savedN!=null){N=PT.savedN;PT.savedN=null;}STACK=400;if(H&&H.personalFlow)H=null;PT.question=null;}
+function petAct(action,amt){const h=H;if(!personalTraining()||!h||!h.personalFlow||h.over||ANIM||h.toAct[0]!==h.hero)return;const q=PT.question,d=petDecision(h,h.hero);if(!q)return;if(action==='C'&&d.toCall<=0||action==='X'&&d.toCall>0)return;if(action==='R'){amt=Number(amt)||d.personalSize;if(!d.canRaise||amt<d.minTo||amt>500)return;}const correct=q.allowed.includes(action)&&(action!=='R'||amt===d.personalSize);q.done=true;q.action=action;q.amount=action==='R'?amt:0;q.correct=correct;
+ const history=h.log.map(e=>({p:e.p,a:e.a,amt:e.amt})),row={id:q.id,handId:h.personalId,t:q.t,rv:q.rv,kind:q.kind,heroPos:q.heroPos,openerPos:q.openerPos,hand:q.hand,action,amount:q.amount,expected:q.allowed,correct,assisted:q.assisted,rangeMode:q.rangeMode,seating:Array.from({length:10},(_,k)=>h.prof[(h.hero+k)%10].name),randomSeating:q.randomSeating,fullContext:q.context,history};
+ PT.rows.push(row);PT.rows=PT.rows.slice(-500);PT.pending.push(row);if(!PT.session)PT.session={n:0,correct:0,streak:0};if(!q.assisted){PT.session.n++;PT.session.correct+=correct?1:0;PT.session.streak=correct?PT.session.streak+1:0;}h.decisions.push({...q,history});h.personalIndex++;ptPersist();ptFlush();
+ FRAMES=[];apply(h,h.hero,action,action==='R'?amt:0);if(!checkOver(h))petRun(h);if(!h.over)petQuestion(h);play();ptStats();
+}
+function petGrid(q){const b=gridEl({d:q.d||{ch:q.ch,kind:q.kind},h:q.hand});b.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>'+cap(RAISE_NAME[q.kind]||'рейз')+'</span><span><i style="background:var(--call)"></i>'+(q.kind==='open'?'лимп':'колл')+'</span><span><i style="background:linear-gradient(135deg,var(--raise) 50%,var(--fold) 50%)"></i>по условиям</span><span><i style="background:var(--fold)"></i>фолд / чек</span>';return b;}
+function petDominators(hand){const ranks='AKQJT98765432',candidates={A:['AK','AQ','AJ','AT'],K:['AK','KQ','KJ','KT'],Q:['AQ','KQ','QJ','QT'],J:['AJ','KJ','QJ','JT']}[hand[0]]||[];return candidates.filter(h=>{const other=h[0]===hand[0]?h[1]:h[1]===hand[0]?h[0]:null;return other&&ranks.indexOf(other)<ranks.indexOf(hand[1]);}).join('/');}
+function petExplain(q){
+ const d=q.d,c=q.context,hand=q.hand,call=d.toCall,pot=d.pot,price=call?Math.round(call/(pot+call)*100):0,remaining=500-c.bet,ratio=call?Math.round((500-c.curBet)/call):0,behind=q.behind?q.behind.length:Math.max(0,9-c.p),pos=q.heroPos;
+ const expected=q.allowed.map(a=>a==='R'?(RAISE_NAME[d.kind]||'рейз')+' до '+d.personalSize:a==='C'?(d.kind==='open'||d.kind==='iso'?'лимп / оверлимп':'колл')+' '+call:a==='X'?'чек':'фолд').join(' / ');
+ const lines=[`${hand}, ${pos}. Банк ${pot}; доплата ${call}. ${call?'Цена колла '+price+'%. ':''}База: ${expected}.`];
+ const pair=hand.length===2,suited=hand.endsWith('s'),ace=hand[0]==='A';
+ if(q.allowed.length>1){lines.push('Граница диапазона: оба отмеченных действия допустимы. Открывай при редких 3-бетах за спиной и хорошей возможности добрать; отказывайся от пограничного входа, если часто получишь повышение или останешься без позиции против сильного продолжения. Это выбор условий, а не обязательный микс.');}
+ else if(q.allowed[0]==='F'){
+  if(q.action==='C'&&call){lines.push(`${price}% — лишь цена входа, не оценка прибыльности. ${c.callers?'Дополнительные коллеры дают мёртвые деньги, но снижают твою долю эквити и вероятность выиграть слабой парой.':'Против диапазона рейзера важна доминация, а не только привлекательность двух карт.'}`);if(pair)lines.push(`До стека соперника остаётся около ${ratio} доплат. Сет приходит на флоп примерно в 12% случаев, а полная оплата не гарантирована; колл нельзя оправдать одним сет-майнингом.`);else if(!suited)lines.push('Разномастная рука редко собирает натсовый флеш, а попадание в старшую карту может проигрывать лучшему кикеру. Крупный банк усиливает обратные потенциальные шансы.');else lines.push('Одномастность помогает реализации, но не компенсирует автоматически слишком сильный диапазон и игроков, способных повысить после тебя.');}
+  else if(q.action==='R'){lines.push('У этого повышения нет достаточной базы: для велью нужны худшие коллы, для блефа — достаточно фолдов. Сам по себе блокер или желание забрать мёртвые деньги не заменяет эти условия.');if(!suited&&!pair){const examples=petDominators(hand);if(examples)lines.push(`${hand} уязвима к доминации: существенная часть продолжений с ${examples} выигрывает у тебя при совпадении старшей пары. Изоляция не превращает слабый кикер в велью.`);}if(q.villain&&['station','passive','wide'].includes(q.villain.model))lines.push(`${q.villain.name} ожидаемо продолжает широко. Это помогает добирать сильной рукой, но уменьшает фолд-эквити слабого рейза; не расширяй изоляцию одним желанием остаться один на один.`);}
+  else lines.push('Отказ от входа сохраняет стек для рук, которые лучше реализуют эквити против этого диапазона и цены.');
+ }else if(q.allowed[0]==='R'){
+  if(d.kind==='open')lines.push(`${hand} достаточно сильна для входа с ${pos}. ${pair?'Пара имеет готовое шоудаун-велью и может собрать сет.':suited&&ace?'Одномастный туз сочетает натсовый потенциал с блокером на сильные тузы.':suited?'Высокие связанные одномастные карты лучше реализуют эквити и чаще собирают сильные дро.':'Высокие карты могут доминировать часть коллов соперников.'} Размер 16 применяется ко всему открытию, а не выдаёт силу руки.`);
+  else if(d.kind==='iso'||d.kind==='bbiso')lines.push(`Рейз до ${d.personalSize} увеличивает цену лимперам и строит банк с сильной частью диапазона. На ${c.callers} лимпера учтены мёртвые деньги; это не обычное открытие до 16. ${pair||ace?'Сильную готовую руку не нужно превращать в дешёвый лотерейный вход.':'Изоляция выгоднее при возможности получить коллы от рук хуже.'}`);
+  else if(q.rangeMode==='polar'&&['A5s','A4s'].includes(hand))lines.push('Это блефовая часть полярного повышения: туз уменьшает число AA/AK, одномастность и колесо дают потенциал после колла. Решающий аргумент — заданные избыточные фолды, не сам блокер. Против цепкого продолжения переключайся на линейный вариант.');
+  else lines.push(`Повышение до ${d.personalSize} разыгрывает сильную часть диапазона. Сравни с коллом: ${c.callers?'при '+c.callers+' коллерах маленькое повышение даёт всем хорошую цену и почти не сокращает поле.':'колл оставляет более широкие диапазоны в банке, а рейз сразу строит банк и ограничивает реализацию эквити.'} Наличие велью-рейза сейчас не означает автоматического выставления против следующего повышения.`);
+  if(q.action==='C'&&d.kind==='open'&&c.callers===0)lines.push('Лимп первым вне SB оставляет блайндам дешёвый вход и не строит банк. Здесь альтернатива — открытие, а не оверлимп.');
+  if(q.action==='F')lines.push('Фолд пропускает предусмотренный базой вход; причина для отклонения должна быть конкретнее общего страха большого банка. Точное EV здесь не вычислялось.');
+ }else if(q.allowed[0]==='C'){
+  lines.push(`${call?'Колл сохраняет руки хуже и не изолирует тебя против наиболее сильной части продолжения.':'Не нужно раздувать банк без основания.'} ${d.ip?'Позиция помогает контролировать размер банка и реализовать эквити.':'Без позиции особенно важно не переоценивать одну пару.'}`);
+  if(q.action==='R')lines.push(`Рейз до ${d.personalSize} — не автоматическое улучшение колла: какие руки хуже оплатят и какие лучшие выкинут? Если ответов мало, ты выбиваешь слабые руки и оставляешь сильные.`);
+  if(pair&&call)lines.push(`Отношение оставшегося стека к доплате около ${ratio}:1. Учитывай и шоудаун-велью пары, а не обещай себе выиграть весь стек при любом сете.`);
+ }
+ if(c.level>=2)lines.push(`После повышения цена и диапазоны изменились: первоначальный опен больше не является аргументом продолжать. Сохраняется ${remaining} до решения; размер следующего банка важнее уже вложенных денег.`);
+ if(behind&&c.level<=1)lines.push(`После тебя ещё действуют ${q.behind?q.behind.slice(0,4).map(p=>p.name+' ('+p.pos+')').join(', ')+(q.behind.length>4?' и другие':''):behind+' игроков'}. Возможность сквиза / 3-бета ещё не закрыта.`);
+ if(q.selectedStrategy==='polar'&&q.rangeMode==='linear')lines.push('Полярный блефовый вариант здесь не применён: ожидаются широкие коллы. Использована линейная альтернатива — больше сильных рук, меньше блефов.');
+ if(d.policy.sourcePage)lines.push(`Основа состава: чарт Литтла, стр. ${d.policy.sourcePage}; размеры адаптированы под 125 ББ и текущую линию, без рассчитанного EV.`);
+ return lines;
+}
+function petBlock(q,i){const b=ptElement('section','verdict'),header=ptElement('h3','',(q.correct?'Верно':'Ошибка')+' · '+KIND[q.kind]+' · '+q.heroPos);b.append(header,ptElement('p','',q.hand+' · твой ответ: '+q.action+(q.amount?' '+q.amount:'')));for(const line of petExplain(q))b.append(ptElement('p','',line));if(q.assisted)b.append(ptElement('p','hint','С подсказкой — отдельно от самостоятельных ответов.'));b.append(petGrid(q));return b;}
+function petRender(){const h=H;if(!h||!h.personalFlow)return;renderTable(h);if(h.over){const panel=$('#panel');panel.replaceChildren();const next=ptElement('button','next','Следующая раздача ↵');next.id='next';next.type='button';next.onclick=petNew;panel.append(next);h.decisions.forEach((q,i)=>panel.append(petBlock(q,i)));}else{renderActions();if(h.decisions.length){const prev=h.decisions[h.decisions.length-1],details=ptElement('details','pt-prior');details.append(ptElement('summary','',`Предыдущее решение: ${prev.correct?'верно':'ошибка'} · ${prev.hand}`),petBlock(prev,h.decisions.length-1));$('#panel').append(details);}}ptStats();}
+function ptStats(){if(!personalTraining())return;const rows=PT.rows,solo=rows.filter(d=>!d.assisted),aided=rows.filter(d=>d.assisted),pct=a=>a.length?Math.round(a.filter(d=>d.correct).length/a.length*100)+'%':'—',s=PT.session||{n:0,correct:0,streak:0};$('#sessline').innerHTML='Сессия <b>'+s.correct+'/'+s.n+'</b> · серия <b>'+s.streak+'</b>';$('#stats').hidden=false;const box=$('#statsbody');box.replaceChildren(ptElement('p','',`Последние ${rows.length} решений: самостоятельно ${solo.length} (${pct(solo)}), с подсказкой ${aided.length} (${pct(aided)}).`));const errors={};for(const d of solo.filter(d=>!d.correct)){const k=(KIND[d.kind]||d.kind)+' · '+d.heroPos;errors[k]=(errors[k]||0)+1;}for(const [k,n]of Object.entries(errors).sort((a,b)=>b[1]-a[1]).slice(0,5))box.append(ptElement('p','hint',k+': '+n+' ошибок'));const sync=ptElement('button','linkbtn',PT.status||'Синхронизировать');sync.type='button';sync.onclick=ptFlush;box.append(sync);}
+function petProfileTools(card){
+ if(!personalOwner())return;const base=ptElement('div','profile-gto-content');for(const child of [...card.children])if(!child.classList.contains('sheethead'))base.append(child);card.append(base);
+ const bar=ptElement('div','controls profile-mode-filter'),mode=document.createElement('select');mode.setAttribute('aria-label','Режим статистики');for(const [v,t]of [['gto','GTO'],['personal','Индивидуальный префлоп']]){const o=document.createElement('option');o.value=v;o.textContent=t;mode.append(o);}mode.value=personalTraining()?'personal':'gto';const count=document.createElement('select');count.setAttribute('aria-label','Период индивидуальной статистики');for(const n of [100,300,500]){const o=document.createElement('option');o.value=n;o.textContent='Последние '+n+' решений';count.append(o);}count.value='300';bar.append(mode,count);card.querySelector('.sheethead').after(bar);const panel=ptElement('div','profile-personal-content');card.append(panel);let rows=PT.owner===AUTH.login.trim().toLowerCase()?PT.rows.slice():[];let status='Загружаем историю…';
+ const word=a=>({R:'рейз',C:'колл',F:'фолд',X:'чек'})[a]||a;
+ const draw=()=>{const personal=mode.value==='personal';base.hidden=personal;panel.hidden=!personal;count.hidden=!personal;if(!personal)return;panel.replaceChildren();const selected=rows.slice(-Number(count.value)),solo=selected.filter(d=>!d.assisted),hints=selected.filter(d=>d.assisted),good=solo.filter(d=>d.correct).length,hands=new Set(selected.map(d=>d.handId||d.id)).size;
+  panel.append(ptElement('h2','',solo.length?Math.round(good/solo.length*100)+'% самостоятельно':'Пока нет самостоятельных ответов'),ptElement('p','',`${good}/${solo.length} верных · ${hands} раздач · с подсказкой ${hints.length}`),ptElement('p','hint',status));
+  const groups={};for(const d of solo){const k=KIND[d.kind]||d.kind;groups[k]||(groups[k]={n:0,good:0});groups[k].n++;groups[k].good+=d.correct?1:0;}for(const [k,g]of Object.entries(groups))panel.append(ptElement('p','',`${k}: ${g.good}/${g.n} · ${Math.round(g.good/g.n*100)}%`));
+  const bad=solo.filter(d=>!d.correct);if(bad.length){panel.append(ptElement('h3','','Ошибки для повторения'));for(const d of bad.slice(-8).reverse()){const c=d.fullContext,call=c?c.curBet-c.bet:null,price=c&&call>0?Math.round(call/(c.pot+call)*100):null,expected=Array.isArray(d.expected)?d.expected:d.expected==='RF'?['R','F']:d.expected==='CF'?['C','F']:[d.expected];panel.append(ptElement('p','',`${d.hand} · ${d.heroPos} · ${KIND[d.kind]||d.kind}: ${word(d.action)}${d.amount?' '+d.amount:''} вместо ${expected.map(word).join(' / ')}.${price!=null?' Доплата '+call+' в банк '+c.pot+', цена '+price+'%.':''}`));}
+   const tooLoose=bad.filter(d=>d.action==='C'&&(Array.isArray(d.expected)?d.expected.includes('F'):d.expected==='F')).length,overRaise=bad.filter(d=>d.action==='R'&&(Array.isArray(d.expected)?d.expected.includes('C'):d.expected==='C')).length;if(tooLoose)panel.append(ptElement('p','hint',`Приоритет: ${tooLoose} лишних коллов. Сравнивай цену с диапазоном и реализацией эквити, особенно при ререйзах; дешёвый колл сам по себе не делает доминируемую руку хорошей.`));if(overRaise)panel.append(ptElement('p','hint',`Приоритет: ${overRaise} повышений вместо колла. Перед рейзом называй худшие руки, которые оплатят, и лучшие, которые выбросят.`));
+  }panel.append(ptElement('p','hint','Частоты входов в тренировочных сценариях не считаются реальным VPIP/PFR. Результаты разных версий диапазонов сохранены в истории; оценка относится к версии, действовавшей при ответе.'));
+ };mode.onchange=draw;count.onchange=draw;draw();const token=AUTH.token;api('personalHistory',{token}).then(r=>{if(!r||!r.ok||!Array.isArray(r.dec))throw Error('history');const map=new Map([...r.dec,...rows].map(d=>[d.id,d]));rows=[...map.values()].sort((a,b)=>a.t-b.t);status='Индивидуальная статистика · отдельно от GTO';draw();}).catch(()=>{status='Показана локальная история: сервер временно недоступен.';draw();});
+}
+let PET_CHART_PICK={kind:'vs3b',hero:4,villain:7,callers:2};
+function petContinuationCharts(box){
+ const pick=PET_CHART_PICK,bar=ptElement('div','controls pet-chart-controls');
+ const selector=(label,values,current,change)=>{const l=ptElement('label','sizesel',label+' '),s=document.createElement('select');s.setAttribute('aria-label',label);for(const [value,text]of values){const o=document.createElement('option');o.value=value;o.textContent=text;s.append(o);}s.value=current;s.onchange=()=>{change(s.value);personalRender();};l.append(s);bar.append(l);};
+ selector('Ситуация',[['vs3b','После моего открытия — против 3-бета'],['vs4b','После моего 3-бета — против 4-бета'],['iso','Передо мной лимперы'],['squeeze','Опен и коллеры']],pick.kind,v=>pick.kind=v);
+ const min=pick.kind==='vs4b'?1:pick.kind==='squeeze'?2:pick.kind==='iso'?1:0,max=pick.kind==='vs3b'?8:9;if(pick.hero<min||pick.hero>max)pick.hero=Math.max(min,Math.min(max,pick.hero));
+ selector('Моя позиция',PT_POS.map((p,i)=>[i,p]).filter(([i])=>i>=min&&i<=max),pick.hero,v=>pick.hero=Number(v));
+ const opponents=PT_POS.map((p,i)=>[i,p]).filter(([i])=>pick.kind==='vs3b'?i>pick.hero:pick.kind==='squeeze'?i<pick.hero-1:i<pick.hero);
+ if(!opponents.some(([i])=>i===pick.villain))pick.villain=opponents[0][0];if(pick.kind!=='iso')selector('Позиция соперника',opponents,pick.villain,v=>pick.villain=Number(v));
+ const lim=pick.kind==='squeeze'?Math.min(5,pick.hero-pick.villain-1):Math.min(5,pick.hero);pick.callers=Math.min(lim,Math.max(1,pick.callers));if(['iso','squeeze'].includes(pick.kind))selector('Лимперов / коллеров',Array.from({length:lim},(_,i)=>[i+1,String(i+1)]),pick.callers,v=>pick.callers=Number(v));box.append(bar);
+ const h=pick.hero,v=pick.villain,blind=p=>p===8?2:p===9?4:0;let c;
+ if(pick.kind==='vs3b'){const r=v>=8&&!(v===9&&h===8)?64:48;c={p:h,level:2,raisers:[h,v],curBet:r,bet:16,lastRaise:r-16,callers:0,pot:6+16-blind(h)+r-blind(v),rangeMode:'base'};}
+ else if(pick.kind==='vs4b'){const three=h>=8&&!(h===9&&v===8)?64:48,opIP=(v>=8?v-10:v)>(h>=8?h-10:h),four=Math.round(three*(opIP?2.3:2.6)/2)*2;c={p:h,level:3,raisers:[v,h,v],curBet:four,bet:three,lastRaise:four-three,callers:0,pot:6+four-blind(v)+three-blind(h),rangeMode:'base'};}
+ else if(pick.kind==='iso')c={p:h,level:0,raisers:[],curBet:4,bet:blind(h),lastRaise:4,callers:pick.callers,pot:6+4*pick.callers,rangeMode:'base'};
+ else c={p:h,level:1,raisers:[v],curBet:16,bet:blind(h),lastRaise:12,callers:pick.callers,pot:6+16-blind(v)+16*pick.callers,rangeMode:'base'};
+ const policy=pcPolicy(PERSONAL_DATA,c),ch=petChart(policy),call=c.curBet-c.bet,caption=ptElement('p','rnghint',`${PT_POS[h]} · банк ${c.pot} · доплата ${call} · ${(RAISE_NAME[policy.kind]||'рейз')} до ${policy.raiseTo}. ${policy.sourcePage?'Состав по таблице Литтла, стр. '+policy.sourcePage+'.':'Адаптированная модель для этой структуры банка.'}`);box.append(caption,petGrid({ch,kind:policy.kind,hand:null,d:{ch,kind:policy.kind}}));
+}
+
+Object.assign(KIND,{squeeze:'Сквиз'});RAISE_NAME.squeeze='3-бет';
+ptNext=petNew;ptDraw=petRender;ptAnswer=(a)=>{if(H&&H.personalFlow)petAct(a,petDecision(H,H.hero).personalSize);};ptGrid=petGrid;
 setupTrainingFilters();
+$('.ctl2').appendChild($('#training-filters-button'));
 ptSetupFilters();
 
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
