@@ -437,6 +437,15 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 .settings-dialog button:focus-visible,#settingsbtn:focus-visible{outline:3px solid var(--call);outline-offset:3px}
 #settingsbtn{width:36px;height:36px}#settingsbtn svg{width:20px;height:20px}
 @media(max-width:380px){.settings-dialog{padding:18px}.felt-option{font-size:10px}}
+
+.personal-tabs{margin-bottom:16px}.personal-tabs [aria-disabled="true"]{opacity:.55;cursor:not-allowed}.personal-grid-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}.personal-card{min-width:0;padding:12px;border:1px solid var(--line);border-radius:14px}.personal-card h3{margin:0 0 12px}.personal-card .gridblock{max-width:100%}
+
+.personal-tabs .rngtab,.personal-action{padding:9px 14px;min-height:38px;width:auto}.personal-tabs{justify-content:flex-start}.personal-guide p{line-height:1.65}.personal-guide a{color:var(--orange)}
+
+#training-filters{color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;width:min(420px,calc(100vw - 28px));max-height:80dvh;box-sizing:border-box;overflow:auto;box-shadow:0 18px 70px #0005}#training-filters::backdrop{background:#0007}.filter-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.filter-dialog-head h2{font-size:18px;margin:0}#training-filter-fields{display:flex;flex-direction:column;gap:18px}#training-filter-fields .sizesel{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px}#training-filter-fields select{max-width:70%;min-height:38px}#training-filter-fields #gto-model-controls{flex-direction:column;align-items:stretch;gap:14px}#training-filter-fields .seg{width:100%}.filter-done{margin-top:22px;width:100%;min-height:40px}.filter-toggle{min-height:38px}@media(max-width:560px){#training-filters{margin:auto auto 12px;width:calc(100vw - 24px);max-height:80dvh}}
+
+/* Personal responsive layout */
+#personal-content,.personal-grid-list,.personal-card .gridblock{min-width:0}#personal-content>.controls{flex-wrap:wrap;justify-content:flex-start;margin:12px 0}#personal-content .gridwrap{min-width:0;width:100%}#personal-content .range-matrix{min-width:0}.premium-tag{font-size:9px;border:1px solid currentColor;border-radius:4px;padding:1px 3px;margin-left:4px;text-transform:uppercase}.personal-tabs{flex-wrap:wrap}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -482,6 +491,7 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
   </div>
 
   <section class="ranges" id="ranges" hidden>
+<div class="controls personal-tabs"><button id="rng-standard" class="rngtab" type="button" aria-pressed="true">Общие</button><button id="rng-personal" class="rngtab" type="button" aria-pressed="false" aria-disabled="true">Персональные <span class="premium-tag">Premium</span></button></div><div id="personal-content" hidden></div><div id="standard-ranges">
     <div class="controls rngctl">
       <button type="button" class="rngtab anybtn" id="rng-any" aria-pressed="false">Any range</button>
       <label class="sizesel" for="rng-stack">Стек <select id="rng-stack"><option value="100" selected>100 ББ</option><option value="125" disabled>125 ББ — скоро</option><option value="150" disabled>150 ББ — скоро</option></select></label>
@@ -494,12 +504,13 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
     <p class="rnghint" id="rng-hint">8-max, 100 ББ, без рейка и анте. Все открытия для 8-max сверены с GTO Wizard: обычно 2,5 ББ; SB — лимп или рейз 3 ББ. Частоты округлены в источнике. Для других форматов таблицы приближённые.</p>
     <div class="rnglist" id="rng-list"></div>
     <div class="anyrng" id="anyrng" hidden>
-      <div class="anyhead"><output id="any-out"></output><button type="button" class="anystep" id="any-m" aria-label="Меньше">−</button><input type="range" id="any-sl" min="0" max="100" step="0.5" value="15" aria-label="Процент лучших рук"><button type="button" class="anystep" id="any-p" aria-label="Больше">+</button></div>
+      <div class="anyhead"><output id="any-out"></output><button type="button" class="anystep" id="any-m" aria-label="Меньше">−</button><input type="range" id="any-sl" min="0" max="100" step="1" value="15" aria-label="Процент лучших рук"><button type="button" class="anystep" id="any-p" aria-label="Больше">+</button></div>
       <div id="any-grid"></div>
     </div>
-  </section>
+  </div></section>
 
   <div class="controls playcontrols">
+<button class="helpbtn filter-toggle" id="training-filters-button" type="button" aria-haspopup="dialog" aria-controls="training-filters">☷ Фильтры</button>
     <button class="helpbtn" id="restart" type="button" hidden>Рестарт</button>
     <div class="seg" id="style">
       <button id="s-gto" aria-pressed="true">GTO</button>
@@ -520,7 +531,8 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
     <div class="score sessline" id="sessline"></div>
   </div>
 
-  <div class="table-wrap" id="table"></div>
+  <dialog id="training-filters" aria-labelledby="training-filters-title"><div class="filter-dialog-head"><h2 id="training-filters-title">Фильтры тренировки</h2><button class="helpbtn" id="training-filters-close" type="button" aria-label="Закрыть фильтры">✕</button></div><div id="training-filter-fields"></div><button class="helpbtn filter-done" id="training-filters-done" type="button">Готово</button></dialog>
+<div class="table-wrap" id="table"></div>
   <div class="log" id="log"></div>
 
   <div id="panel"></div>
@@ -1040,7 +1052,7 @@ function finishHand(h){
   h.eqRange=er?er.hero:null; h.eqVill={}; if(er) ids.slice(1).forEach((i,k)=>h.eqVill[i]=er.vill[k]);
   h.eq=h.eqHands;
 }
-const pctS=x=>(Math.round(x*1000)/10).toFixed(1).replace('.',',')+'%';
+const pctS=x=>Math.round(x*100)+'%';
 
 // ===================== animation =====================
 let FRAMES=[], ANIM=null;
@@ -1310,7 +1322,7 @@ function gridEl(x){
     const e=document.createElement('div'); const cc=cls(d.ch,hh); if(cc!=='F') e.className=cc; if(d.ch.source&&d.ch.source.unreachable&&d.ch.source.unreachable.includes(hh)){e.style.opacity='.25';e.title=hh+': рука не доходит до этой точки в диапазоне источника';} if(hh===x.h) e.classList.add('me');
     e.textContent=hh.slice(0,2); e.title=d.ch.source&&d.ch.source.unreachable&&d.ch.source.unreachable.includes(hh)?hh+': рука не доходит до этой точки в диапазоне источника':hh;
     const fv=d.ch.f&&['RF','RC','CF','RCF'].includes(cc)?d.ch.f[hh]:null;
-    if(fv!=null){ const [r,c]=(Array.isArray(fv)?fv:[fv,0]).map(v=>d.ch.source?Math.round(v*10000)/100:Math.round(v*100)); e.className='RFq'+(hh===x.h?' me':'');
+    if(fv!=null){ const [r,c]=(Array.isArray(fv)?fv:[fv,0]).map(v=>Math.round(v*100)); e.className='RFq'+(hh===x.h?' me':'');
       e.style.background=`linear-gradient(to top,var(--raise) ${r}%,var(--call) ${r}%,var(--call) ${r+c}%,var(--fold) ${r+c}%)`;
       e.title=`${hh}: ${r?RAISE_NAME[d.kind]+' '+r+'%':''}${r&&c?', ':''}${c?'колл '+c+'%':''}`;
       const sm=document.createElement('small'); sm.textContent=Array.isArray(fv)&&r&&c?`${r}/${c}`:(r||c)+'%'; e.appendChild(sm); }
@@ -2668,7 +2680,7 @@ $('#m-hand').onclick=()=>{ setGame('hand'); idle(); };
 // ---- вкладка «Диапазоны»: справочник GTO-чартов, стол и раздача в это время скрыты ----
 let RNGV=false;
 const RNG_HIDE=['.controls:not(.ranges .controls)','#table','#log','#panel','#stats'];
-function showRanges(on){ RNGV=on; $('#ranges').hidden=!on;
+function showRanges(on){ if(on&&$('#training-filters').open)$('#training-filters').close(); personalRefresh(); RNGV=on; $('#ranges').hidden=!on;
   for(const q of RNG_HIDE) document.querySelectorAll(q).forEach(e=>e.classList.toggle('rnghide',on));
   $('#m-rng').setAttribute('aria-pressed',on);
   if(on){ for(const id of ['m-prof','m-pre','m-hand']) $('#'+id).setAttribute('aria-pressed',false); renderRanges(); }
@@ -2697,6 +2709,73 @@ function renderRanges(){ const box=$('#rng-list'); box.innerHTML='';
     box.append(b,det); } }
 $('#rng-n').onchange=$('#rng-act').onchange=$('#rng-op').onchange=renderRanges; // смена параметров сворачивает все строки
 $('#m-rng').onclick=()=>showRanges(true);
+// Personal study draft: 10-max / 125 BB / 4 BB. Not a solver solution.
+let PERSONAL_VIEW=false;
+let PERSONAL_DATA=null,PERSONAL_LOADING=false;
+function personalOwner(){return !!(AUTH&&AUTH.token&&AUTH.login.trim().toLowerCase()==='мельник');}
+function personalRefresh(){
+ const owner=personalOwner(),button=$('#rng-personal');
+ button.setAttribute('aria-disabled',String(!owner));
+ button.title=owner?'Мои основные диапазоны':'Premium — пока недоступно';
+ if(!owner){PERSONAL_VIEW=false;PERSONAL_DATA=null;$('#personal-content').replaceChildren();}
+ personalSelect(PERSONAL_VIEW&&owner);
+}
+function personalSelect(on){
+ PERSONAL_VIEW=!!on&&personalOwner();
+ $('#rng-personal').setAttribute('aria-pressed',String(PERSONAL_VIEW));
+ $('#rng-standard').setAttribute('aria-pressed',String(!PERSONAL_VIEW));
+ $('#personal-content').hidden=!PERSONAL_VIEW;
+ $('#standard-ranges').hidden=PERSONAL_VIEW;
+ if(PERSONAL_VIEW) personalRender();
+}
+function personalRender(){
+ const box=$('#personal-content');box.replaceChildren();if(!personalOwner())return;
+ if(!PERSONAL_DATA){
+  const p=document.createElement('p');p.className='rnghint';p.textContent=PERSONAL_LOADING?'Загружаем персональные диапазоны…':'Не удалось загрузить диапазоны. Попробовать ещё раз';box.append(p);
+  p.onclick=()=>personalLoad();if(!PERSONAL_LOADING)personalLoad();return;
+ }
+ const note=document.createElement('p');note.className='rnghint';
+ note.textContent='Мои основные диапазоны · 10 игроков · 125 ББ · блайнды 2/4 · опен до 16 · без рейка.';box.append(note);
+ const ctl=document.createElement('div');ctl.className='controls';
+ for(const [value,label] of [['open','Open'],['vs','Raise/Call'],['polar','Полярный 3-бет'],['guide','Как применять']]){
+  const b=document.createElement('button');b.className='rngtab personal-action';b.textContent=label;b.type='button';b.setAttribute('aria-pressed',String(value===PERSONAL_ACTION));b.onclick=()=>{PERSONAL_ACTION=value;personalRender();};ctl.append(b);
+ }box.append(ctl);
+ if(PERSONAL_ACTION==='guide'){
+  const p=document.createElement('div');p.className='personal-guide';
+  const sections=[['Основа','Материалы Литтла адаптированы вручную под 10-max, 125 ББ и открытие 4 ББ. Это рабочая база без расчёта точного EV. Диапазоны не зависят автоматически от имени соперника.'],['Open','Все до нас выбросили. На UTG–BTN — рейз до 16 или фолд. На SB отдельно показаны рейз до 16, лимп до 4 и фолд. После чужого лимпа или рейза используем другие ситуации.'],['Raise/Call','Один опен до 16 без лимперов и коллеров. Выбираем позицию рейзера и свою позицию. Размер 3-бета: ориентир до 48 в позиции, до 64 без позиции; BB против SB — до 48. Против другого размера или нескольких участников диапазоны требуют поправки.'],['Когда подходит полярный 3-бет','Против достаточно широкого опена игрока, который фолдит на 3-беты. В показанных вариантах мы на BTN против LJ, HJ или CO. Сильные руки рейзим на велью, часть одномастных тузов используем как блеф, подходящие средние руки оставляем в колле. Нужны разумные ожидания фолдов, а не просто страшная карта или имя соперника.'],['Когда лучше основная стратегия','Против цепких коллеров, узких ранних открытий и при неопределённом профиле предпочитаем основную таблицу. Фолды игрока на ривере не доказывают фолды на 3-бет. После колд-колла другого игрока это уже сквиз; эти таблицы его не описывают.'],['Дешёвый вход в мультивей','Колл или оверлимп с мелкой парой, одномастным тузом или коннектором — отдельная стратегия, а не блефовая часть полярного 3-бета. Нужны позиция, подходящая цена, эффективные стеки и возможность добрать. Слабая разномастная рука не становится хорошей только из-за мультивея. Отдельные таблицы против лимперов ещё не добавлены.'],['Лимиты профилей','Наблюдения о друзьях — тенденции. Маша и Пивко за спиной могут получить сильные руки. Крупная ставка не раскрывает карты. При сомнении опираемся на общую базу и доступную информацию.']];
+  for(const [title,text]of sections){const h=document.createElement('h3');h.textContent=title;const q=document.createElement('p');q.textContent=text;p.append(h,q);}
+  const refs=document.createElement('p');refs.textContent='Литтл: ';for(const [title,url]of [['5 Preflop Tips — с 15:27','https://www.youtube.com/watch?v=ZKwlQdT6m00&t=927s'],['Preflop & Postflop HACKS — с 7:11','https://www.youtube.com/watch?v=Imfz_Cj1uVM&t=431s']]){const a=document.createElement('a');a.textContent=title;a.href=url;a.target='_blank';a.rel='noopener';refs.append(a,document.createTextNode(' · '));}p.append(refs);box.append(p);return;
+ }
+ if(PERSONAL_ACTION==='vs'||PERSONAL_ACTION==='polar'){
+  const polar=PERSONAL_ACTION==='polar';
+  const label=document.createElement('label');label.textContent='Опен до 16 с позиции ';const select=document.createElement('select');select.setAttribute('aria-label','Персональные: позиция рейзера');
+  const positions=polar?['LJ','HJ','CO']:[...Object.keys(PERSONAL_DATA.open),'SB'];if(!positions.includes(PERSONAL_OPENER))PERSONAL_OPENER=positions[0];for(const pos of positions){const o=document.createElement('option');o.value=pos;o.textContent=pos;select.append(o);}select.value=PERSONAL_OPENER;select.onchange=()=>{PERSONAL_OPENER=select.value;personalRender();};label.append(select);box.append(label);
+  const p=document.createElement('p');p.className='rnghint';p.textContent=polar?'BTN против одного опена до 16: вариант против достаточно широкого открытия и заметных фолдов на 3-бет. Без коллеров. Против станции или неизвестного игрока предпочитаем основную таблицу.':'Один опен до 16, без лимперов и коллеров. 3-бет: до 48 в позиции, до 64 без позиции; BB против SB — до 48. Под другие размеры нужна поправка.';box.append(p);
+  const list=document.createElement('div');list.className='personal-grid-list';for(const [key,spec]of Object.entries(polar?PERSONAL_DATA.polar:PERSONAL_DATA.vs)){if(!key.startsWith(PERSONAL_OPENER+'>'))continue;const ch=chart(spec);for(const h of ch.R)ch.C.delete(h);const card=document.createElement('article');card.className='personal-card';const title=document.createElement('h3');title.textContent=key.split('>')[1]+' против '+PERSONAL_OPENER;card.append(title,gridEl({d:{ch,kind:'vsopen'},h:null}));card.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>3-бет</span><span><i style="background:var(--call)"></i>колл</span><span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';list.append(card);}box.append(list);return;
+ }
+ const hint=document.createElement('p');hint.className='rnghint';hint.textContent='Все до тебя выбросили: красный — рейз до 16, серый — фолд. SB: зелёный — лимп до 4. Если перед тобой лимп или рейз, эти таблицы не применяются.';box.append(hint);
+ const list=document.createElement('div');list.className='personal-grid-list';
+ for(const [pos,text] of [...Object.entries(PERSONAL_DATA.open),['SB',null]]){
+  const card=document.createElement('article');card.className='personal-card';
+  const title=document.createElement('h3');const ch=chart(pos==='SB'?PERSONAL_DATA.sb:{R:text});title.textContent=pos+' · Open до 16 · ≈ '+rangePct(ch,['R'])+'%'+(pos==='SB'?' · лимп ≈ '+rangePct(ch,['C'])+'%':'');
+  card.append(title,gridEl({d:{ch,kind:'open'},h:null}));
+  // A draft without mixed actions needs only its two actual legend entries.
+  card.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>рейз до 16</span>'+(pos==='SB'?'<span><i style="background:var(--call)"></i>лимп до 4</span>':'')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';
+  list.append(card);
+ }box.append(list);
+}
+let PERSONAL_ACTION='open';
+let PERSONAL_OPENER='UTG';
+async function personalLoad(){
+ if(PERSONAL_LOADING||!personalOwner())return;PERSONAL_LOADING=true;const token=AUTH.token;
+ try{const r=await api('personalRanges',{token});if(!personalOwner()||AUTH.token!==token)return;if(!r||!r.ok||!r.data)throw Error('unavailable');PERSONAL_DATA=r.data;}
+ catch(e){if(personalOwner()&&AUTH.token===token){const p=document.createElement('p');p.className='rnghint';p.textContent='Персональные диапазоны пока недоступны. Нажми, чтобы повторить.';p.onclick=personalLoad;$('#personal-content').replaceChildren(p);}}
+ finally{PERSONAL_LOADING=false;}
+ if(PERSONAL_VIEW&&personalOwner()&&AUTH.token===token&&PERSONAL_DATA)personalRender();
+}
+
+$('#rng-standard').onclick=()=>personalSelect(false);
+$('#rng-personal').onclick=()=>personalSelect(true);
 // ---- Any range: любой процент лучших рук. Порядок — эквити руки против случайной руки (как в PokerStove) ----
 const ANY_ORD='AA KK QQ JJ TT 99 88 AKs 77 AQs AKo AJs AQo ATs 66 AJo KQs KJs ATo A9s KTs KQo A8s 55 A7s A9o KJo QJs K9s KTo A8o QTs A6s A5s A4s A7o QJo K8s A3s 44 JTs K9o Q9s QTo A6o A5o K7s A2s A4o K6s K8o Q8s J9s K5s A3o JTo Q9o K7o 33 A2o K4s T9s Q7s J8s K6o K3s Q6s Q8o J9o K2s K5o Q5s T8s J7s K4o Q4s Q7o T9o J8o 22 K3o Q6o Q3s 98s T7s J6s K2o Q5o Q2s T8o J5s J7o 97s Q4o T6s J4s J3s 98o T7o Q3o 87s J6o 96s J2s Q2o J5o T5s T4s 97o 86s T6o J4o 95s T3s 76s J3o 87o T2s 85s 96o J2o T5o 94s 75s T4o 93s 86o 65s 84s 95o 92s T3o 76o 74s T2o 54s 85o 64s 83s 94o 75o 82s 73s 93o 65o 53s 63s 84o 92o 43s 74o 54o 72s 64o 52s 62s 83o 82o 42s 73o 53o 32s 63o 43o 72o 52o 62o 42o 32o'.split(' ');
 let ANYV=false, ANYCELL=null;
@@ -2710,14 +2789,14 @@ function anyUpd(){ const pct=+$('#any-sl').value, need=pct/100*1326; let got=0;
     e.style.setProperty('--q',q);
     e.style.color=q>=60?'#fff':''; }
   $('#any-sl').style.setProperty('--p',pct+'%');
-  $('#any-out').innerHTML=`<b>${pct.toFixed(1).replace('.',',')}%</b><small>· ${Math.round(need)} комбо</small>`; }
+  $('#any-out').innerHTML=`<b>${Math.round(pct)}%</b><small>· ${Math.round(need)} комбо</small>`; }
 function anyMode(on){ ANYV=on; $('#rng-any').setAttribute('aria-pressed',on); $('#anyrng').hidden=!on;
   for(const id of ['rng-list','rng-hint']) $('#'+id).hidden=on;
   for(const id of ['rng-n','rng-act','rng-op']) $('#'+id).disabled=on; // в Any range стол и действие не участвуют
   if(on){ if(!ANYCELL) anyGrid(); anyUpd(); } }
 $('#rng-any').onclick=()=>anyMode(!ANYV);
 $('#any-sl').oninput=anyUpd;
-for(const [id,dx] of [['any-m',-.5],['any-p',.5]]) $('#'+id).onclick=()=>{ const sl=$('#any-sl'); sl.value=Math.max(0,Math.min(100,+sl.value+dx)); anyUpd(); };
+for(const [id,dx] of [['any-m',-1],['any-p',1]]) $('#'+id).onclick=()=>{ const sl=$('#any-sl'); sl.value=Math.max(0,Math.min(100,+sl.value+dx)); anyUpd(); };
 for(const id of ['rng-n','rng-act']) $('#'+id).addEventListener('change',()=>anyMode(false));
 setMode('gto'); // по умолчанию всегда GTO
 setGame('prof');
@@ -2741,6 +2820,8 @@ function authErr(code,text){ $('#autherr').textContent=text||AERR[code]||'Не �
   const f=AFIELD[code]||[]; for(const id of ['alogin','apass']) $('#'+id).setAttribute('aria-invalid',f.includes(id)?'true':'false');
   if(f.length) $('#'+f[0]).focus({preventScroll:true}); }
 function showAuth(mode){
+  if($('#training-filters').open)$('#training-filters').close();
+  PERSONAL_VIEW=false; PERSONAL_DATA=null; $('#personal-content').replaceChildren();
   AMODE=mode||'login';
   $('#auth').hidden=false; $('#app').hidden=true;
   const reg=AMODE==='reg';
@@ -2752,6 +2833,7 @@ function showAuth(mode){
   authUpd(); $('#alogin').focus({preventScroll:true});
 }
 function showApp(response){
+  personalRefresh();
   $('#auth').hidden=true; $('#app').hidden=false;
   if(AUTH){ S.player=AUTH.login; save(); }
   RUN=null; idle(); updScore(); activateAccountSettings(response);
@@ -3014,6 +3096,17 @@ function syncFelt(){ const f=document.documentElement.dataset.felt||'green'; doc
 document.querySelectorAll('.felt-option').forEach(b=>{ b.onclick=()=>{ document.documentElement.dataset.felt=b.dataset.felt; try{ localStorage.setItem('mp-felt',b.dataset.felt); }catch(e){} syncFelt(); changeAccountSettings({felt:b.dataset.felt}); }; });
 syncFelt();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',syncTheme);
+
+function setupTrainingFilters(){
+ const fields=$('#training-filter-fields');
+ for(const el of [$('#style'),$('#gto-model-controls'),$('#players').closest('label'),$('#filters')])fields.appendChild(el);
+ const dialog=$('#training-filters'),button=$('#training-filters-button');
+ button.onclick=()=>dialog.showModal();
+ for(const id of ['training-filters-close','training-filters-done'])$('#'+id).onclick=()=>dialog.close();
+ dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
+}
+setupTrainingFilters();
+
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
 if(AUTH) showApp();
 else showAuth('login');
