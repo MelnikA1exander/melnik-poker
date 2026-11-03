@@ -859,7 +859,7 @@ function openRange(p){
   const h=H, lr=lineRange(h,p), L=(h.lines&&h.lines[p])||[], me=p===h.hero, hand=h.players[p].h;
   const w=h.rng&&h.rng[p]?classW(h.rng[p]):lr.w;
   let combosIn=0; for(const hh of ALL169) combosIn+=combos(hh)*w[hh];
-  const pct=Math.round(combosIn/1326*1000)/10;
+  const pct=Math.round(combosIn/1326*100);
   const who= me?`Ты · ${lab(p)}`:(NAMES()?`${prof(h,p).name} · ${lab(p)}`:lab(p));
   const line=L.map(e=>e.tag||({F:'Фолд',X:'Чек',C:'Колл',R:'Рейз'})[e.a]).join(' → ')||'—';
   const src= h.rng&&h.rng[p]?(me?'Диапазон, с которым модель сыграла бы твою линию до этого момента.':'Диапазон по линии: префлоп по GTO-чартам, после флопа по модели тренажёра.'):me?(MODE==='ind'?'Диапазон, с которым правильно (с поправкой на соперников) сыграть твою линию.':'Диапазон, с которым GTO играет твою линию.'):(NAMES()&&prof(h,p).style!=='reg'?`Диапазон по профилю: ${prof(h,p).note}`:'Диапазон по GTO-чартам тренажёра.');
