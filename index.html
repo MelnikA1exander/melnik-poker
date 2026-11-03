@@ -446,6 +446,8 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 
 /* Personal responsive layout */
 #personal-content,.personal-grid-list,.personal-card .gridblock{min-width:0}#personal-content>.controls{flex-wrap:wrap;justify-content:flex-start;margin:12px 0}#personal-content .gridwrap{min-width:0;width:100%}#personal-content .range-matrix{min-width:0}.premium-tag{font-size:9px;border:1px solid currentColor;border-radius:4px;padding:1px 3px;margin-left:4px;text-transform:uppercase}.personal-tabs{flex-wrap:wrap}
+
+.pt-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0}.pt-actions button{min-width:95px;min-height:46px}.personal-training-filters{display:grid;gap:16px}.pt-check{display:flex;gap:10px;align-items:center;line-height:1.4}.pt-check input{accent-color:var(--orange);width:18px;height:18px}.personal-training-filters[hidden]{display:none!important}.personal-training-filters select{max-width:65%}body:has(#s-ind[aria-pressed="true"]) #table .seat .pos{font-size:11px}@media(max-width:520px){body:has(#s-ind[aria-pressed="true"]) #table .seat:not(.hero){width:80px}body:has(#s-ind[aria-pressed="true"]) #table .seat:not(.hero) .pos{font-size:9px}}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -543,6 +545,9 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 
 <script>
 // ===================== ranges =====================
+const PT_POS=['UTG','UTG+1','UTG+2','UTG+3','LJ','HJ','CO','BTN','SB','BB'];
+let PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};
+let PT_OPTIONS={random:false,hints:true,strategy:'base'};
 const RANKS='AKQJT98765432';
 const ri=r=>RANKS.indexOf(r);
 function expand(tok){
@@ -1369,7 +1374,7 @@ function renderEnd(){
 }
 
 // ===================== stats / filters =====================
-function updScore(){ syncRun(); $('#score').innerHTML='<button class="helpbtn" id="profbtn" type="button">Профиль</button>'; // шапка одинаковая на всех вкладках
+function updScore(){ if(personalTraining())return ptStats(); syncRun(); $('#score').innerHTML='<button class="helpbtn" id="profbtn" type="button">Профиль</button>'; // шапка одинаковая на всех вкладках
   $('#sessline').innerHTML= REC ? (RUN?`${esc(RUN.name)} · раздача <b>${Math.min(PROF_N,RUN.hands.length+(H&&!H.over&&!IDLE?1:0))}/${PROF_N}</b>`:'') : `Сессия <b>${String(session.pts/2).replace('.',',')}/${session.n}</b> · серия <b>${session.streak}</b>`; }
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 const FILTERS={all:'Все позиции',EP:'Ранние',MP:'Средние',LP:'Поздние',BL:'Блайнды'};
@@ -1827,10 +1832,11 @@ function postBlock(h,x,i){
   lg.innerHTML='<span><i style="background:var(--raise)"></i>в диапазоне</span><span><i class="lgp"></i>частично</span><span><i style="background:var(--fold);border:1px solid var(--line)"></i>нет</span>';
   w.append(cap,wGrid(x.snap,null),lg); b.appendChild(w); return b;
 }
-function setGame(g){ showRanges(false);
+function setGame(g){ if(g!=='pre'&&STYLE==='ind')setMode('gto'); showRanges(false);
   if(g==='prof'&&!REC){ SAVEDF=filter; filter='all'; } else if(g!=='prof'&&REC){ filter=SAVEDF; }
   $('#gto-model-controls').hidden=!['prof','pre'].includes(g); GAME=g; REC=g==='prof'; MODE=REC?'gto':STYLE; $('#m-prof').setAttribute('aria-pressed',g==='prof'); $('#m-pre').setAttribute('aria-pressed',g==='pre'); $('#m-hand').setAttribute('aria-pressed',g==='hand');
-  if(g==='pre'){ if(STYLE==='ind') setMode('gto'); const b=$('#s-ind'); b.classList.add('locked'); b.setAttribute('aria-disabled','true'); b.title='Скоро'; b.innerHTML='Индивидуальный <span class="soon">скоро</span>'; }
+  if(g==='pre'&&STYLE==='ind'&&!personalOwner())setMode('gto');
+  ptRefreshUi();
   $('#style').classList.toggle('hide',REC); $('#filters').classList.toggle('hide',REC); $('#stats').hidden=g!=='pre'; updScore();
 
 }
@@ -2569,9 +2575,9 @@ function renderResults(){ syncRun();
 function recExport(){ return JSON.stringify(S.recs||[]); }
 
 // ===================== flow =====================
-function next(){ if(REC&&(!RUN||RUN.hands.length>=PROF_N)) return idle(); IDLE=false; newHand(); play(); updScore(); }
+function next(){ if(personalTraining())return ptNext(); if(REC&&(!RUN||RUN.hands.length>=PROF_N)) return idle(); IDLE=false; newHand(); play(); updScore(); }
 let IDLE=true;
-function idle(){ syncRun();
+function idle(){ if(personalTraining())return ptIdle(); syncRun();
   clearTimeout(ANIM); ANIM=null; IDLE=true; if(BACK){ H=BACK.cur; H.backUsed=true; BACK=null; }
   const t=$('#table'); t.innerHTML='';
   const rail=document.createElement('div'); rail.className='rail'; const felt=document.createElement('div'); felt.className='felt';
@@ -2615,7 +2621,8 @@ $('#theme').onclick=()=>{ const t=curTheme()==='dark'?'light':'dark', R=document
 syncTheme();
 $('#players').onchange=e=>{ N=+e.target.value; save(); idle(); };
 document.addEventListener('keydown',e=>{
-  if($('#settings-dialog').open) return;
+  if(personalTraining()){ptKeyboard(e);return;}
+  if($('#training-filters').open||$('#settings-dialog').open) return;
   if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
   if(RNGV&&!document.getElementById('sheet')) return; // во вкладке «Диапазоны» горячие клавиши стола не работают
   if(document.getElementById('app').hidden) return;
@@ -2666,14 +2673,9 @@ function openHelp(){
 $('#help').onclick=openHelp;
 let STYLE='gto';
 function setMode(m){ STYLE=m; MODE=REC?'gto':m; S.mode=m; save(); $('#s-gto').setAttribute('aria-pressed',m==='gto'); $('#s-ind').setAttribute('aria-pressed',m==='ind'); }
-$('#s-gto').onclick=()=>{ setMode('gto'); idle(); };
-// индивидуальный режим временно закрыт; открывается тройным нажатием
-let indTaps=[];
-$('#s-ind').onclick=()=>{ const b=$('#s-ind');
-  if(GAME==='pre') return; // в режиме «Префлоп» индивидуальный закрыт полностью, пока не готовы свои чарты
-  if(b.classList.contains('locked')){ const t=Date.now(); indTaps=indTaps.filter(x=>t-x<1500); indTaps.push(t);
-    if(indTaps.length<3) return; b.classList.remove('locked'); b.removeAttribute('aria-disabled'); b.title=''; b.textContent='Индивидуальный'; }
-  setMode('ind'); idle(); };
+$('#s-gto').onclick=()=>{ setMode('gto'); ptRefreshUi(); updScore(); renderStats(); idle(); };
+// Personal mode is server-authorized, not unlocked by repeated taps.
+$('#s-ind').onclick=()=>{if(!personalOwner()||GAME!=='pre')return;setMode('ind');ptRefreshUi();$('#training-filters').close();idle();};
 $('#m-prof').onclick=()=>{ setGame('prof'); idle(); };
 $('#m-pre').onclick=()=>{ setGame('pre'); idle(); };
 $('#m-hand').onclick=()=>{ setGame('hand'); idle(); };
@@ -2714,6 +2716,7 @@ let PERSONAL_VIEW=false;
 let PERSONAL_DATA=null,PERSONAL_LOADING=false;
 function personalOwner(){return !!(AUTH&&AUTH.token&&AUTH.login.trim().toLowerCase()==='мельник');}
 function personalRefresh(){
+ if(typeof ptRefreshUi==='function')ptRefreshUi();
  const owner=personalOwner(),button=$('#rng-personal');
  button.setAttribute('aria-disabled',String(!owner));
  button.title=owner?'Мои основные диапазоны':'Premium — пока недоступно';
@@ -2742,15 +2745,15 @@ function personalRender(){
  }box.append(ctl);
  if(PERSONAL_ACTION==='guide'){
   const p=document.createElement('div');p.className='personal-guide';
-  const sections=[['Основа','Материалы Литтла адаптированы вручную под 10-max, 125 ББ и открытие 4 ББ. Это рабочая база без расчёта точного EV. Диапазоны не зависят автоматически от имени соперника.'],['Open','Все до нас выбросили. На UTG–BTN — рейз до 16 или фолд. На SB отдельно показаны рейз до 16, лимп до 4 и фолд. После чужого лимпа или рейза используем другие ситуации.'],['Raise/Call','Один опен до 16 без лимперов и коллеров. Выбираем позицию рейзера и свою позицию. Размер 3-бета: ориентир до 48 в позиции, до 64 без позиции; BB против SB — до 48. Против другого размера или нескольких участников диапазоны требуют поправки.'],['Когда подходит полярный 3-бет','Против достаточно широкого опена игрока, который фолдит на 3-беты. В показанных вариантах мы на BTN против LJ, HJ или CO. Сильные руки рейзим на велью, часть одномастных тузов используем как блеф, подходящие средние руки оставляем в колле. Нужны разумные ожидания фолдов, а не просто страшная карта или имя соперника.'],['Когда лучше основная стратегия','Против цепких коллеров, узких ранних открытий и при неопределённом профиле предпочитаем основную таблицу. Фолды игрока на ривере не доказывают фолды на 3-бет. После колд-колла другого игрока это уже сквиз; эти таблицы его не описывают.'],['Дешёвый вход в мультивей','Колл или оверлимп с мелкой парой, одномастным тузом или коннектором — отдельная стратегия, а не блефовая часть полярного 3-бета. Нужны позиция, подходящая цена, эффективные стеки и возможность добрать. Слабая разномастная рука не становится хорошей только из-за мультивея. Отдельные таблицы против лимперов ещё не добавлены.'],['Лимиты профилей','Наблюдения о друзьях — тенденции. Маша и Пивко за спиной могут получить сильные руки. Крупная ставка не раскрывает карты. При сомнении опираемся на общую базу и доступную информацию.']];
+  const sections=[['Основа','Материалы Литтла адаптированы вручную под 10-max, 125 ББ и открытие 4 ББ. Это рабочая база без расчёта точного EV. Диапазоны не зависят автоматически от имени соперника.'],['Open','Все до нас выбросили. На UTG–BTN — рейз до 16 или фолд. На SB отдельно показаны рейз до 16, лимп до 4 и фолд. После чужого лимпа или рейза используем другие ситуации.'],['Raise/Call','Один опен до 16 без лимперов и коллеров. Выбираем позицию рейзера и свою позицию. Размер 3-бета: ориентир до 48 в позиции, до 64 без позиции; BB против SB — до 48. Против другого размера или нескольких участников диапазоны требуют поправки.'],['Когда подходит полярный 3-бет','Против достаточно широкого опена игрока, который фолдит на 3-беты. Во вкладке заполнены все пары позиций; это условные альтернативы, а не обязательный выбор. Сильные руки рейзим на велью, часть одномастных тузов используем как блеф, подходящие средние руки оставляем в колле. Нужны разумные ожидания фолдов, а не просто страшная карта или имя соперника.'],['Когда лучше основная стратегия','Против цепких коллеров, узких ранних открытий и при неопределённом профиле предпочитаем основную таблицу. Фолды игрока на ривере не доказывают фолды на 3-бет. После колд-колла другого игрока это уже сквиз; эти таблицы его не описывают.'],['Дешёвый вход в мультивей','Колл или оверлимп с мелкой парой, одномастным тузом или коннектором — отдельная стратегия, а не блефовая часть полярного 3-бета. Нужны позиция, подходящая цена, эффективные стеки и возможность добрать. Слабая разномастная рука не становится хорошей только из-за мультивея. Отдельные таблицы против лимперов ещё не добавлены.'],['Лимиты профилей','Наблюдения о друзьях — тенденции. Игроки за спиной могут получить сильные руки. Крупная ставка не раскрывает карты. При сомнении опираемся на общую базу и доступную информацию.']];
   for(const [title,text]of sections){const h=document.createElement('h3');h.textContent=title;const q=document.createElement('p');q.textContent=text;p.append(h,q);}
   const refs=document.createElement('p');refs.textContent='Литтл: ';for(const [title,url]of [['5 Preflop Tips — с 15:27','https://www.youtube.com/watch?v=ZKwlQdT6m00&t=927s'],['Preflop & Postflop HACKS — с 7:11','https://www.youtube.com/watch?v=Imfz_Cj1uVM&t=431s']]){const a=document.createElement('a');a.textContent=title;a.href=url;a.target='_blank';a.rel='noopener';refs.append(a,document.createTextNode(' · '));}p.append(refs);box.append(p);return;
  }
  if(PERSONAL_ACTION==='vs'||PERSONAL_ACTION==='polar'){
   const polar=PERSONAL_ACTION==='polar';
   const label=document.createElement('label');label.textContent='Опен до 16 с позиции ';const select=document.createElement('select');select.setAttribute('aria-label','Персональные: позиция рейзера');
-  const positions=polar?['LJ','HJ','CO']:[...Object.keys(PERSONAL_DATA.open),'SB'];if(!positions.includes(PERSONAL_OPENER))PERSONAL_OPENER=positions[0];for(const pos of positions){const o=document.createElement('option');o.value=pos;o.textContent=pos;select.append(o);}select.value=PERSONAL_OPENER;select.onchange=()=>{PERSONAL_OPENER=select.value;personalRender();};label.append(select);box.append(label);
-  const p=document.createElement('p');p.className='rnghint';p.textContent=polar?'BTN против одного опена до 16: вариант против достаточно широкого открытия и заметных фолдов на 3-бет. Без коллеров. Против станции или неизвестного игрока предпочитаем основную таблицу.':'Один опен до 16, без лимперов и коллеров. 3-бет: до 48 в позиции, до 64 без позиции; BB против SB — до 48. Под другие размеры нужна поправка.';box.append(p);
+  const positions=[...Object.keys(PERSONAL_DATA.open),'SB'];if(!positions.includes(PERSONAL_OPENER))PERSONAL_OPENER=positions[0];for(const pos of positions){const o=document.createElement('option');o.value=pos;o.textContent=pos;select.append(o);}select.value=PERSONAL_OPENER;select.onchange=()=>{PERSONAL_OPENER=select.value;personalRender();};label.append(select);box.append(label);
+  const p=document.createElement('p');p.className='rnghint';p.textContent=polar?'Условная альтернатива для всех позиций: только против достаточно широкого опена и подтверждённых избыточных фолдов на 3-бет. Особенно осторожно против раннего открытия и без позиции. Против станции или неизвестного игрока — основная таблица. Без коллеров.':'Один опен до 16, без лимперов и коллеров. 3-бет: до 48 в позиции, до 64 без позиции; BB против SB — до 48. Под другие размеры нужна поправка.';box.append(p);
   const list=document.createElement('div');list.className='personal-grid-list';for(const [key,spec]of Object.entries(polar?PERSONAL_DATA.polar:PERSONAL_DATA.vs)){if(!key.startsWith(PERSONAL_OPENER+'>'))continue;const ch=chart(spec);for(const h of ch.R)ch.C.delete(h);const card=document.createElement('article');card.className='personal-card';const title=document.createElement('h3');title.textContent=key.split('>')[1]+' против '+PERSONAL_OPENER;card.append(title,gridEl({d:{ch,kind:'vsopen'},h:null}));card.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>3-бет</span><span><i style="background:var(--call)"></i>колл</span><span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';list.append(card);}box.append(list);return;
  }
  const hint=document.createElement('p');hint.className='rnghint';hint.textContent='Все до тебя выбросили: красный — рейз до 16, серый — фолд. SB: зелёный — лимп до 4. Если перед тобой лимп или рейз, эти таблицы не применяются.';box.append(hint);
@@ -2820,6 +2823,8 @@ function authErr(code,text){ $('#autherr').textContent=text||AERR[code]||'Не �
   const f=AFIELD[code]||[]; for(const id of ['alogin','apass']) $('#'+id).setAttribute('aria-invalid',f.includes(id)?'true':'false');
   if(f.length) $('#'+f[0]).focus({preventScroll:true}); }
 function showAuth(mode){
+  PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};
+  if(STYLE==='ind')setMode('gto');
   if($('#training-filters').open)$('#training-filters').close();
   PERSONAL_VIEW=false; PERSONAL_DATA=null; $('#personal-content').replaceChildren();
   AMODE=mode||'login';
@@ -3105,7 +3110,98 @@ function setupTrainingFilters(){
  for(const id of ['training-filters-close','training-filters-done'])$('#'+id).onclick=()=>dialog.close();
  dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
 }
+// A separate one-decision preflop trainer. Never writes into GTO sessions.
+function personalTraining(){return GAME==='pre'&&STYLE==='ind'&&personalOwner();}
+function ptElement(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function ptGrid(q){const block=gridEl({d:{ch:q.ch,kind:q.kind},h:q.hand});block.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>'+(q.kind==='open'?'рейз до 16':'3-бет')+'</span>'+((q.kind!=='open'||q.heroPos==='SB')?'<span><i style="background:var(--call)"></i>'+(q.kind==='open'?'лимп до 4':'колл')+'</span>':'')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';return block;}
+function ptKey(){return 'melnik-personal-training:'+AUTH.login.trim().toLowerCase();}
+function ptPersist(){try{localStorage.setItem(ptKey(),JSON.stringify({rows:PT.rows.slice(-500),pending:PT.pending,options:PT_OPTIONS}));}catch(e){PT.status='Не удалось сохранить на устройстве';}}
+function ptRefreshUi(){
+ const b=$('#s-ind'),owner=personalOwner();b.innerHTML='Индивидуальный <span class="premium-tag">Premium</span>';b.classList.toggle('locked',!owner);b.setAttribute('aria-disabled',String(!owner));b.title=owner?'Персональная тренировка 10-max / 125 ББ':'Premium — пока недоступно';
+ const on=personalTraining(),fields=$('#personal-training-filters');if(fields)fields.hidden=!on;
+ $('#gto-model-controls').hidden=on||!['prof','pre'].includes(GAME);$('#players').closest('label').hidden=on;
+ if(!owner){PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};}
+}
+async function ptLoad(){
+ if(!personalTraining()||PT.loading)return;const token=AUTH.token;PT.loading=true;
+ try{
+  if(!PERSONAL_DATA){const r=await api('personalRanges',{token});if(!r||!r.ok||!r.data)throw Error('ranges');if(!personalTraining()||AUTH.token!==token)return;PERSONAL_DATA=r.data;}
+  const owner=AUTH.login.trim().toLowerCase();if(PT.owner!==owner){PT.owner=owner;try{const local=JSON.parse(localStorage.getItem(ptKey())||'{}');PT.rows=Array.isArray(local.rows)?local.rows:[];PT.pending=Array.isArray(local.pending)?local.pending:[];if(local.options)PT_OPTIONS=Object.assign(PT_OPTIONS,local.options);}catch(e){}}
+  const r=await api('personalHistory',{token});if(!personalTraining()||AUTH.token!==token)return;
+  if(r&&r.ok&&Array.isArray(r.dec)){const map=new Map([...r.dec,...PT.rows].map(d=>[d.id,d]));PT.rows=[...map.values()].sort((a,b)=>a.t-b.t).slice(-500);PT.status='Синхронизировано';}else PT.status='История сохранена на устройстве';
+  PT.loaded=true;ptPersist();ptFilterValues();ptFlush();
+ }catch(e){if(personalTraining())PT.status='Нет связи. Нажми «Повторить загрузку».';}
+ finally{PT.loading=false;}
+ if(personalTraining())ptIdle();
+}
+function ptFilterValues(){const r=$('#pt-random'),h=$('#pt-hints'),s=$('#pt-strategy');if(r)r.checked=PT_OPTIONS.random;if(h)h.checked=PT_OPTIONS.hints;if(s)s.value=PT_OPTIONS.strategy;}
+function ptSetupFilters(){
+ const fields=ptElement('div','personal-training-filters');fields.id='personal-training-filters';fields.hidden=true;
+ fields.append(ptElement('p','hint','Персональная игра: 10 игроков · 125 ББ · опен до 16.'));
+ for(const [id,label,key]of [['pt-random','Случайная рассадка в каждой задаче','random'],['pt-hints','Разрешить подсказку диапазона','hints']]){const l=ptElement('label','pt-check');const input=document.createElement('input');input.type='checkbox';input.id=id;input.checked=PT_OPTIONS[key];input.onchange=()=>{PT_OPTIONS[key]=input.checked;ptPersist();if(PT.question&&!PT.question.done)ptDraw();};l.append(input,document.createTextNode(label));fields.append(l);}
+ const l=ptElement('label','sizesel','Стратегия '),select=document.createElement('select');select.id='pt-strategy';for(const [v,t]of [['base','Основная'],['polar','Полярный 3-бет — заданное условие']]){const o=document.createElement('option');o.value=v;o.textContent=t;select.append(o);}select.onchange=()=>{PT_OPTIONS.strategy=select.value;ptPersist();};l.append(select);fields.append(l,ptElement('p','hint','Позиции выбираются общим фильтром. При полярной стратегии задача явно предполагает подходящие фолды на 3-бет; это не утверждение о реальном игроке.'));
+ $('#training-filter-fields').append(fields);ptRefreshUi();
+}
+function ptIdle(){
+ if(!personalTraining())return;clearTimeout(ANIM);ANIM=null;H=null;IDLE=true;PT.question=null;ptRefreshUi();$('#stats').hidden=false;
+ $('#table').replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt');felt.append(ptElement('p','potline','Персональный префлоп · 125 ББ'));rail.append(felt);$('#table').append(rail);
+ const b=ptElement('button','startbtn',PERSONAL_DATA?(PT.loaded?'Начать персональную раздачу':'Загружаем историю…'):'Загрузить персональные диапазоны');b.id='start';b.type='button';b.disabled=PT.loading;b.onclick=()=>{if(!PERSONAL_DATA||!PT.loaded)ptLoad();else ptNext();};$('#table').append(b);
+ $('#panel').replaceChildren();$('#log').textContent='Одна задача — одно префлоп-решение. Статистика отдельно от GTO. '+PT.status;
+ ptStats();if(!PT.loaded&&!PT.loading)ptLoad();
+}
+function ptSampleHand(ch){
+ const groups={R:[],C:[],F:[]};for(const h of ALL169){const action=cls(ch,h);for(let n=0;n<combos(h);n++)groups[action].push(h);}const options=Object.values(groups).filter(g=>g.length),pool=options[Math.floor(Math.random()*options.length)];return pool[Math.floor(Math.random()*pool.length)];
+}
+function ptCards(hand){const suits=['s','h','d','c'],a=suits[Math.floor(Math.random()*4)];let b=a;if(hand.length===2||hand.endsWith('o')){const others=suits.filter(s=>s!==a);b=others[Math.floor(Math.random()*3)];}return [hand[0]+a,hand[1]+b];}
+function ptNext(){
+ if(!personalTraining())return;if(!PERSONAL_DATA||!PT.loaded)return ptLoad();
+ const allowed=PT_POS.map((_,i)=>i).filter(i=>filter==='all'||filter==='EP'&&i<=3||filter==='MP'&&i>=4&&i<=5||filter==='LP'&&i>=6&&i<=7||filter==='BL'&&i>=8);
+ const hi=allowed[Math.floor(Math.random()*allowed.length)],kind=hi===0?'open':hi===9?'vsopen':Math.random()<.5?'open':'vsopen';
+ const oi=kind==='vsopen'?Math.floor(Math.random()*hi):null,heroPos=PT_POS[hi],openerPos=oi==null?null:PT_POS[oi],rangeMode=kind==='open'?'base':PT_OPTIONS.strategy;
+ const spec=kind==='open'?(hi===8?PERSONAL_DATA.sb:{R:PERSONAL_DATA.open[heroPos]}):(rangeMode==='polar'?PERSONAL_DATA.polar:PERSONAL_DATA.vs)[openerPos+'>'+heroPos];
+ const ch=chart(spec),hand=ptSampleHand(ch),players=PERSONAL_DATA.players.map(x=>({...x}));
+ if(PT_OPTIONS.random)for(let i=players.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[players[i],players[j]]=[players[j],players[i]];}
+ const seatOf=i=>(i-hi+10)%10;
+ PT.question={id:'pt-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10),t:Date.now(),rv:PERSONAL_DATA.version,kind,hi,oi,heroPos,openerPos,rangeMode,ch,hand,cards:ptCards(hand),players,openerName:oi==null?null:players[seatOf(oi)].name,expected:cls(ch,hand),assisted:false,done:false,randomSeating:PT_OPTIONS.random};
+ H=null;IDLE=false;ptDraw();
+}
+function ptDraw(){
+ const q=PT.question;if(!q||!personalTraining())return;
+ const t=$('#table');t.replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt'),pot=q.kind==='open'?6:q.oi===8?20:22;
+ felt.append(ptElement('p','potline','Банк '+pot+' · 10 игроков · 125 ББ'));rail.append(felt);t.append(rail);
+ for(let seat=0;seat<10;seat++){
+  const pi=(q.hi+seat)%10,pos=PT_POS[pi],player=q.players[seat],folded=seat!==0&&(q.kind==='open'?pi<q.hi:pi<q.hi&&pi!==q.oi),a=Math.PI/2+seat*2*Math.PI/10,rx=innerWidth<520?38:44;
+  const s=ptElement('div','seat'+(seat===0?' hero turn':'')+(folded?' folded':''));s.style.left=(50+rx*Math.cos(a))+'%';s.style.top=(50+41*Math.sin(a))+'%';
+  if(seat===0){const hand=ptElement('div','hand');q.cards.forEach(c=>hand.append(cardEl(c,'big')));if(PT_OPTIONS.hints||q.done){const b=ptElement('button','plus','+');b.type='button';b.setAttribute('aria-label','Показать мой диапазон');b.onclick=ptHint;hand.append(b);}s.append(hand);}
+  else if(!folded){const mini=ptElement('div','mini');mini.append(ptElement('div','pc back'),ptElement('div','pc back'));s.append(mini);}
+  const bet=pi===q.oi?16:pi===8?2:pi===9?4:0,pod=ptElement('div','pod');pod.append(ptElement('div','pos',seat===0?pos+' · ты':player.name),ptElement('div','pp',seat===0?'Саша':pos),ptElement('div','stk',500-bet));if(pi===q.oi)pod.append(ptElement('div','actb r','Рейз до 16'));s.append(pod);t.append(s);
+  if(pi===7){const d=ptElement('div','dealer','D');d.style.left=(50+rx*.78*Math.cos(a))+'%';d.style.top=(50+31*Math.sin(a))+'%';t.append(d);}
+ }
+ const context=q.kind==='open'?'Все до тебя выбросили.':q.openerName+' ('+q.openerPos+') открывает до 16. До тебя остальные выбросили.';
+ $('#log').textContent=context+(q.rangeMode==='polar'?' Условие задачи: рейзер достаточно широко открывается и избыточно фолдит на 3-беты.':' Основная стратегия.');
+ const panel=$('#panel');panel.replaceChildren();
+ if(!q.done){const actions=ptElement('div','pt-actions');for(const action of ['F','C','R']){if(action==='C'&&q.kind==='open'&&q.heroPos!=='SB')continue;const b=ptElement('button','helpbtn',ptActionWord(action,q));b.type='button';b.onclick=()=>ptAnswer(action);actions.append(b);}panel.append(actions,ptElement('p','hint','Персональная база · ответ оценивается по диапазону, а не по предполагаемым картам соперника.'));}
+ else{const b=ptElement('button','next','Следующая раздача ↵');b.type='button';b.id='next';b.onclick=ptNext;panel.append(b);const result=ptElement('section','verdict');result.append(ptElement('h3','',q.correct?'Верно':'Разберём решение'),ptElement('p','',q.hand+' · твой ответ: '+ptActionWord(q.action,q)+' · база: '+ptActionWord(q.expected,q)),ptElement('p','',ptReason(q)));if(q.assisted)result.append(ptElement('p','hint','Диапазон был открыт до ответа: результат учтён отдельно, с подсказкой.'));
+  const target=q.oi==null?q.players[(q.hi===7?1:10-q.hi+7)%10]:q.players[(q.oi-q.hi+10)%10];result.append(ptElement('p','hint','Тенденция игрока — '+target.name+': '+target.note+' Это контекст для адаптации, не обязательная смена базового ответа.'));
+  result.append(ptGrid(q));panel.append(result);
+ }ptStats();
+}
+function ptActionWord(action,q){if(action==='F')return 'Фолд';if(action==='C')return q.kind==='open'?'Лимп до 4':'Колл '+(16-(q.hi===9?4:q.hi===8?2:0));return q.kind==='open'?'Рейз до 16':'3-бет до '+(q.hi>=8&&!(q.hi===9&&q.oi===8)?64:48);}
+function ptReason(q){
+ if(q.expected==='F')return 'Рука вне выбранного диапазона продолжения. При цене открытия 4 ББ не добавляем колл только ради возможного попадания: учитываем доминацию, позицию и игроков за спиной. Это выбранная граница базы, не доказательство большого отрицательного EV.';
+ if(q.expected==='C')return q.kind==='open'?'На SB эта рука входит в диапазон лимпа Литтла, адаптированный к нашей базе: доплачиваем до 4. Это отдельная ситуация blind versus blind, не рекомендация лимпить первым с любой позиции.':'В базе эта рука остаётся в колле: сохраняем подходящую среднюю часть диапазона, учитывая позицию и цену. Не превращаем каждый колл в обязательство продолжать на любом флопе.';
+ if(q.kind==='open')return 'Рука входит в открытие с '+q.heroPos+'. Рейзом до 16 строим банк с подходящим диапазоном и сохраняем возможность выиграть до флопа. Смена профиля одного соседа сама по себе не меняет базу.';
+ if(q.rangeMode==='polar'&&['A5s','A4s'].includes(q.hand))return 'Это блефовая часть полярного 3-бета: туз блокирует часть сильных продолжений, одномастность и возможность стрита дают играбельность после колла. Главное условие — фолды на 3-бет, заданные в этой задаче. Против цепкого колла или узкого открытия не переносим этот ответ автоматически.';
+ return 'Рука входит в сильную часть диапазона 3-бета. Повышение получает оплату от подходящих худших рук и/или ограничивает реализацию эквити. Это не обязательство выставляться на 125 ББ против любого 4-бета.';
+}
+function ptHint(){const q=PT.question;if(!q)return;if(!q.done){q.assisted=true;ptPersist();}const overlay=ptElement('div','sheet');overlay.id='sheet';const card=ptElement('div','sheetcard');card.setAttribute('role','dialog');card.setAttribute('aria-modal','true');const head=ptElement('div','sheethead');head.append(ptElement('h3','',q.heroPos+(q.openerPos?' против '+q.openerPos:' · Open')));const close=ptElement('button','xbtn','✕');close.type='button';close.setAttribute('aria-label','Закрыть диапазон');close.onclick=()=>overlay.remove();head.append(close);card.append(head,ptGrid(q));overlay.append(card);overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};document.body.append(overlay);close.focus();}
+function ptAnswer(action){const q=PT.question;if(!q||q.done||!personalTraining())return;q.done=true;q.action=action;q.correct=action===q.expected;const d={id:q.id,t:q.t,rv:q.rv,kind:q.kind,heroPos:q.heroPos,openerPos:q.openerPos,openerName:q.openerName,hand:q.hand,action,expected:q.expected,correct:q.correct,assisted:q.assisted,rangeMode:q.rangeMode,seating:q.players.map(p=>p.name),randomSeating:q.randomSeating};PT.rows.push(d);PT.rows=PT.rows.slice(-500);PT.pending.push(d);PT.status='Сохраняем…';ptPersist();ptDraw();ptFlush();}
+async function ptFlush(){if(PT.saving||!PT.pending.length||!personalOwner())return;PT.saving=true;const token=AUTH.token,owner=PT.owner,batch=PT.pending.slice(0,50);try{const r=await api('personalSave',{token,decisions:batch});if(PT.owner!==owner||!personalOwner()||AUTH.token!==token)return;if(!r||!r.ok||!Array.isArray(r.accepted))throw Error('save');const ids=new Set(r.accepted);PT.pending=PT.pending.filter(d=>!ids.has(d.id));PT.status='Синхронизировано';ptPersist();}catch(e){PT.status='Сохранено на устройстве · повторить синхронизацию';}finally{PT.saving=false;}if(personalTraining())ptStats();if(PT.pending.length&&PT.status==='Синхронизировано')ptFlush();}
+function ptStats(){if(!personalTraining())return;const rows=PT.rows.filter(d=>d.rv===PERSONAL_DATA?.version),solo=rows.filter(d=>!d.assisted),aided=rows.filter(d=>d.assisted);const pct=a=>a.length?Math.round(a.filter(d=>d.correct).length/a.length*100)+'%':'—';$('#sessline').textContent='Персональные · без подсказок '+solo.length+' · '+pct(solo);$('#stats').hidden=false;const box=$('#statsbody');box.replaceChildren(ptElement('p','',`Последние ${rows.length} ответов текущей версии: без подсказки ${solo.length}, верно ${pct(solo)}; с подсказкой ${aided.length}, верно ${pct(aided)}.`));const errors={};for(const d of solo.filter(d=>!d.correct)){const k=d.heroPos+' · '+(d.kind==='open'?'Open':'против '+d.openerPos);errors[k]=(errors[k]||0)+1;}for(const [k,n]of Object.entries(errors).sort((a,b)=>b[1]-a[1]).slice(0,5))box.append(ptElement('p','hint',k+': ошибок '+n));const sync=ptElement('button','helpbtn',PT.status||'Синхронизировать');sync.type='button';sync.onclick=ptFlush;box.append(sync,ptElement('p','hint','В GTO-профиль эти ответы не входят. Частоты задач не оценивают частоты реальной игры.'));}
+function ptKeyboard(e){if($('#training-filters').open||$('#settings-dialog').open||['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;const sheet=document.getElementById('sheet');if(sheet){if(e.key==='Escape'||e.key==='Enter'){e.preventDefault();sheet.remove();}return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();if(!PT.question||PT.question.done)ptNext();return;}const a={f:'F','а':'F',c:'C','с':'C',r:'R','к':'R'}[e.key.toLowerCase()];if(a&&PT.question&&!PT.question.done){if(a==='C'&&PT.question.kind==='open'&&PT.question.heroPos!=='SB')return;e.preventDefault();ptAnswer(a);}}
+
 setupTrainingFilters();
+ptSetupFilters();
 
 // если вход сохранён — сразу в тренажёр, ключ проверяем в фоне
 if(AUTH) showApp();
