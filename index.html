@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#1C5A43">
 </head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400&family=Unbounded:wght@500;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
 <script>try{const t=localStorage.getItem('mp-theme'); if(t==='dark'||t==='light') document.documentElement.dataset.theme=t; const f=localStorage.getItem('mp-felt'); if(['green','blue','red','purple'].includes(f)) document.documentElement.dataset.felt=f;}catch(e){}</script>
 <style>
@@ -2729,6 +2729,8 @@ function personalRefresh(){
  button.title=owner?'Мои основные диапазоны':'Premium — пока недоступно';
  if(!owner){PERSONAL_VIEW=false;PERSONAL_DATA=null;$('#personal-content').replaceChildren();}
  personalSelect(PERSONAL_VIEW&&owner);
+ // Preload in the background: the ranges tab and the personal trainer open without waiting for Apps Script.
+ if(owner&&!PERSONAL_DATA&&!PERSONAL_LOADING)personalLoad();
 }
 function personalSelect(on){
  PERSONAL_VIEW=!!on&&personalOwner();
