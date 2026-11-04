@@ -2801,7 +2801,7 @@ async function personalLoad(){
 }
 
 // SOLVER-VIEW START
-// «Полная раздача»: solved hands at the table (BTN vs BB, 2/5, 100 BB). Data: solver/index.json + per spot flop.json and
+// «Полная раздача»: solved hands at the table (BTN vs BB, 2/5, 100 BB). Data: solver/index.json + per spot flop.json (river solved live in the browser) and
 // t-<card>.json (compact.cjs + split-solver.cjs from TexasSolver). The bot plays the solver strategy of its hand class; the hero's
 // decisions are graded against the solver mix of the hero's class and explained after the hand in J. Little's terms.
 const SV_BASE='solver/',SHC={index:null,flop:{},turn:{}};
@@ -2891,7 +2891,7 @@ async function shNew(){if(!shOn()||!personalOwner())return;clearTimeout(SH_T);SH
   h.heroPos=heroSide==='oop'?meta.oop:meta.ip;h.villPos=heroSide==='oop'?meta.ip:meta.oop;h.phase='pre';h.ev=shPreEvents(meta);h.pi=0;h.pre={SB:2,BB:5};h.folded=new Set();h.preLog=[];h.preDec=[];
   // hero hand: by combos, borderline classes more likely
   const first=heroSide==='oop'?shNode(h,[]):shNode(h,['X']),cands=[],ws=[];for(const [cls,s] of Object.entries(first.c)){for(const cmb of shExpand(cls)){if(h.board.includes(cmb[0])||h.board.includes(cmb[1]))continue;cands.push(cmb);ws.push(Math.max(...s)<80?3:1);}}
-  h.hero=cands[shPick(ws)];h.range=shRangeInit(h,heroSide==='oop'?'ip':'oop');const vi=h.range.filter(x=>!h.hero.includes(x.c[0])&&!h.hero.includes(x.c[1]));h.vill=vi[Math.floor(Math.random()*vi.length)].c;
+  h.hero=cands[shPick(ws)];h.range=shRangeInit(h,heroSide==='oop'?'ip':'oop');h.hrange=shRangeInit(h,heroSide);const vi=h.range.filter(x=>!h.hero.includes(x.c[0])&&!h.hero.includes(x.c[1]));h.vill=vi[Math.floor(Math.random()*vi.length)].c;
   {const p=[...SH_SUITS].sort(()=>Math.random()-.5);SH_SP={};[...SH_SUITS].forEach((x,i)=>SH_SP[x]=p[i]);}SH=h;H=null;IDLE=false;shPreRun();}
  catch(e){shIdle('Не удалось загрузить решённые раздачи. Проверь связь и нажми ещё раз.');}}
 const SH_POSMAP={btn:'BTN',bb:'BB',sb:'SB',co:'CO',hj:'HJ',lj:'LJ',utg:'UTG',utg1:'UTG+1',utg2:'UTG+2',utg3:'UTG+3'},SH_POST=['SB','BB','UTG','UTG+1','UTG+2','UTG+3','LJ','HJ','CO','BTN'];
@@ -2920,12 +2920,13 @@ function shSide(h,s){return s===h.heroSide?'hero':'vill';}
 function shName(h,s){return s==='oop'?h.meta.oop:h.meta.ip;}
 function shLeft(h,s){return h.stack-h.inv[s]-h.bet[s];}
 function shPot(h){return h.pot0+h.inv.oop+h.inv.ip;}
-function shStep(){const h=SH;if(!h||h.over)return;const node=shNode(h);
+function shStep(){const h=SH;if(!h||h.over)return;if(h.street===3&&!h.rnode)return;const node=h.street===3?(h.rnode.t?null:shRvWrap(h,h.rnode)):shNode(h);
  if(!node){return shRunout(h,'Дальше эта линия в солвере не посчитана, поэтому карты открываются без торговли.');}
  h.node=node;if(node.p===h.heroSide){shRender();return;}
- shRender();SH_T=setTimeout(()=>{SH_T=null;if(SH!==h)return;const cls=shCls(h.vill),s=node.c[cls]||node.f,k=shPick(s.map(x=>x+1e-6));shApply(h,node,node.a[k],k);},750);}
+ shRender();SH_T=setTimeout(()=>{SH_T=null;if(SH!==h)return;const s=node.river?node.rn.avg.map(a=>a[node.idx]):(node.c[shCls(h.vill)]||node.f),k=shPick(s.map(x=>x+1e-6));shApply(h,node,node.a[k],k);},750);}
 function shApply(h,node,a,k){const side=node.p,other=side==='oop'?'ip':'oop',kind=a[0],n=+a.slice(1);
- if(shSide(h,side)==='vill'){for(const v of h.range){const s=node.c[v.cls];v.w*=s?s[k]/100:0;}}
+ if(node.river){const rr=h.rv.R[side],lst=shSide(h,side)==='vill'?h.range:h.hrange;for(const v of lst){const j=rr.key.get(v.c.slice().sort().join(''));v.w*=j!=null?node.rn.avg[k][j]:0;}h.rnode=node.rn.k[k];}
+ else{const lst=shSide(h,side)==='vill'?h.range:h.hrange;for(const v of lst){const s=node.c[v.cls];v.w*=s?s[k]/100:0;}}
  h.log.push({street:h.street,side,a,txt:shName(h,side)+(shSide(h,side)==='hero'?' (ты)':'')+': '+shActShort(a,h.stack)});
  try{if(kind==='F')sndFold();else if(kind!=='X')sndChips();}catch(e){}
  h.path.push(a);
@@ -2937,7 +2938,8 @@ function shApply(h,node,a,k){const side=node.p,other=side==='oop'?'ip':'oop',kin
  h.inv.oop+=h.bet.oop;h.inv.ip+=h.bet.ip;h.bet={oop:0,ip:0};
  if(shLeft(h,'oop')<=0||shLeft(h,'ip')<=0)return shRunout(h,'Олл-ин: оставшиеся карты открываются.');
  if(h.street===1)return shDealTurn(h);
- return shRunout(h,'Ривер открывается без торговли: в солвере решения посчитаны на флопе и тёрне.');}
+ if(h.street===2)return shDealRiver(h);
+ return shRunout(h,'');}
 async function shDealTurn(h){const dead=new Set(h.board.concat(h.hero,h.vill)),opts=(h.spot.turns||[]).filter(c=>!dead.has(c));if(!opts.length)return shRunout(h,'');const card=opts[Math.floor(Math.random()*opts.length)];
  h.street=2;h.board.push(card);h.path.push(card);for(const v of h.range)if(v.c.includes(card))v.w=0;h.log.push({street:2,txt:'Тёрн '+shCardTxt(card)});
  try{await shLoadTurn(h,card);}catch(e){return shRunout(h,'Тёрн не загрузился, карты открываются без торговли.');}if(SH!==h)return;shStep();}
@@ -2955,6 +2957,63 @@ function shHeroAct(k){const h=SH;if(!h||h.over||SH_T||!h.node||h.node.p!==h.hero
  h.decisions.push({street:h.street,board:h.board.slice(),node,k,a,s:s.slice(),best,grade,info,eq,mix,cls,path:h.path.slice(),pot:node.pot,toCall:node.toCall});
  shApply(h,node,a,k);}
 
+// ---------- river: in-browser solver (vector CFR+, both ranges after the turn) ----------
+function shRvBuild(P,S){const rb=Math.round;let nid=0;
+ const build=(p,b,nr)=>{const o=p==='oop'?'ip':'oop',toCall=b[o]-b[p],left=S-b[p],n={id:nid++,p,a:[],k:[],pot:P+b.oop+b.ip,toCall};const add=(c,ch)=>{n.a.push(c);n.k.push(ch);};
+  if(toCall===0){add('X',p==='ip'?{t:'sd',b:{...b}}:build('ip',b,nr));
+   if(left>0){const seen=new Set();for(const f of [.5,1]){let amt=rb(f*(P+b.oop+b.ip));if(amt>=left*.67)continue;if(!seen.has(amt)){seen.add(amt);add('B'+amt,build(o,{...b,[p]:amt},nr));}}add('A',build(o,{...b,[p]:S},nr));}}
+  else{add('F',{t:'f',folder:p,b:{...b}});add('C',{t:'sd',b:{...b,[p]:Math.min(b[o],S)}});
+   if(b[o]<S){if(nr<2){const to=rb(b[o]+.6*(P+2*b[o]));if(to<S*.67)add('R'+to,build(o,{...b,[p]:to},nr+1));}add('A',build(o,{...b,[p]:S},nr+1));}}
+  return n;};
+ return build('oop',{oop:0,ip:0},0);}
+function shRvPrep(board,list){const bi=board.map(toInt),cs=[],w=[],rk=[],c1=[],c2=[],key=new Map();
+ for(const v of list){const k=v.c.slice().sort().join('');if(key.has(k))continue;key.set(k,cs.length);cs.push(v);w.push(v.w);const a=toInt(v.c[0]),b=toInt(v.c[1]);c1.push(a);c2.push(b);rk.push(eval7([a,b,...bi]));}
+ const ord=[...cs.keys()].sort((x,y)=>rk[x]-rk[y]);return {cs,w:Float64Array.from(w),rk,c1,c2,key,ord,n:cs.length};}
+function shRvSolve(h,P,S,iters,done){
+ const live=x=>x.w>1e-6&&!h.board.includes(x.c[0])&&!h.board.includes(x.c[1]);
+ const R={},side={hero:h.heroSide,vill:h.heroSide==='oop'?'ip':'oop'};
+ const hl=h.hrange.filter(live),vl=h.range.filter(live);
+ const mx=a=>a.reduce((m,x)=>Math.max(m,x.w),0);
+ if(!hl.some(x=>x.c.join()===h.hero.join()))hl.push({c:h.hero,cls:shCls(h.hero),w:Math.max(mx(hl),1)*1e-3});
+ if(!vl.some(x=>x.c.join()===h.vill.join()))vl.push({c:h.vill,cls:shCls(h.vill),w:Math.max(mx(vl),1)*1e-3});
+ R[side.hero]=shRvPrep(h.board,hl);R[side.vill]=shRvPrep(h.board,vl);
+ // identical-combo index across players
+ const idt={oop:new Int32Array(R.oop.n).fill(-1),ip:new Int32Array(R.ip.n).fill(-1)};
+ R.oop.cs.forEach((v,i)=>{const j=R.ip.key.get(v.c.slice().sort().join(''));if(j!=null){idt.oop[i]=j;idt.ip[j]=i;}});
+ const root=shRvBuild(P,S),nodes=[];(function walk(n){if(n.t)return;nodes.push(n);n.k.forEach(walk);})(root);
+ for(const n of nodes){const m=R[n.p].n;n.reg=n.a.map(()=>new Float64Array(m));n.sum=n.a.map(()=>new Float64Array(m));}
+ const strat=(n)=>{const m=R[n.p].n,A=n.a.length,s=n.a.map(()=>new Float64Array(m));for(let i=0;i<m;i++){let t=0;for(let a=0;a<A;a++)t+=Math.max(0,n.reg[a][i]);for(let a=0;a<A;a++)s[a][i]=t>0?Math.max(0,n.reg[a][i])/t:1/A;}return s;};
+ const term=(n,p,ro)=>{const o=p==='oop'?'ip':'oop',me=R[p],op=R[o],out=new Float64Array(me.n),card=new Float64Array(64);let tot=0;
+  for(let j=0;j<op.n;j++){const r=ro[j];if(!r)continue;tot+=r;card[op.c1[j]]+=r;card[op.c2[j]]+=r;}
+  const nc=i=>{const j=idt[p][i];return tot-card[me.c1[i]]-card[me.c2[i]]+(j>=0?ro[j]:0);};
+  if(n.t==='f'){const val=n.folder===p?-n.b[p]:P+n.b[n.folder];for(let i=0;i<me.n;i++)out[i]=val*nc(i);return out;}
+  const bb=n.b[p];let cl=0,ce=0;const cL=new Float64Array(64),cE=new Float64Array(64);let jl=0,je=0;
+  for(const i of me.ord){const r=me.rk[i];
+   while(jl<op.n&&op.rk[op.ord[jl]]<r){const j=op.ord[jl++],x=ro[j];cl+=x;cL[op.c1[j]]+=x;cL[op.c2[j]]+=x;}
+   while(je<op.n&&op.rk[op.ord[je]]<=r){const j=op.ord[je++],x=ro[j];ce+=x;cE[op.c1[j]]+=x;cE[op.c2[j]]+=x;}
+   const a=me.c1[i],b=me.c2[i],id=idt[p][i],idr=id>=0?ro[id]:0,W=cl-cL[a]-cL[b],LE=ce-cE[a]-cE[b]+idr,T=LE-W,L=nc(i)-LE;
+   out[i]=(P+bb)*W-bb*L+P/2*T;}
+  return out;};
+ const cfr=(n,p,rp,ro,t)=>{if(n.t)return term(n,p,ro);const s=strat(n),A=n.a.length;
+  if(n.p===p){const m=R[p].n,v=new Float64Array(m),ch=[];for(let a=0;a<A;a++){const r2=new Float64Array(m);for(let i=0;i<m;i++)r2[i]=rp[i]*s[a][i];const c=cfr(n.k[a],p,r2,ro,t);ch.push(c);for(let i=0;i<m;i++)v[i]+=s[a][i]*c[i];}
+   for(let a=0;a<A;a++){const R2=n.reg[a],S2=n.sum[a],c=ch[a];for(let i=0;i<m;i++){R2[i]=Math.max(0,R2[i]+c[i]-v[i]);S2[i]+=t*rp[i]*s[a][i];}}return v;}
+  const m=R[n.p].n,v=new Float64Array(R[p].n);for(let a=0;a<A;a++){const r2=new Float64Array(m);for(let i=0;i<m;i++)r2[i]=ro[i]*s[a][i];const c=cfr(n.k[a],p,rp,r2,t);for(let i=0;i<v.length;i++)v[i]+=c[i];}return v;};
+ let t=0;const step=()=>{if(SH!==h)return;const end=Math.min(iters,t+20);for(;t<end;){t++;cfr(root,'oop',R.oop.w,R.ip.w,t);cfr(root,'ip',R.ip.w,R.oop.w,t);}
+  if(t<iters){h.rvProg=Math.round(t/iters*100);shRvThinking(h);setTimeout(step,0);return;}
+  for(const n of nodes){const m=R[n.p].n;n.avg=n.a.map(()=>new Float64Array(m));for(let i=0;i<m;i++){let tt=0;for(let a=0;a<n.a.length;a++)tt+=n.sum[a][i];for(let a=0;a<n.a.length;a++)n.avg[a][i]=tt>0?n.sum[a][i]/tt:1/n.a.length;}delete n.reg;delete n.sum;}
+  done({root,R});};
+ setTimeout(step,0);}
+function shRvThinking(h){const l=$('#log');if(!l)return;let s=l.querySelector('.rvthink');if(!s){s=document.createElement('b');s.className='rvthink';l.append(s);}s.textContent=` · солвер считает ривер${h.rvProg?' '+h.rvProg+'%':''}…`;}
+function shRvIdx(h,side,c){const R=h.rv.R[side];return R.key.get(c.slice().sort().join(''));}
+function shRvWrap(h,n){const pr=h.rv.R[n.p],me=n.p===h.heroSide,cmb=me?h.hero:h.vill,i=shRvIdx(h,n.p,cmb),cls=shCls(cmb),c={},f=n.a.map(()=>0);let tw=0;
+ c[cls]=n.avg.map(a=>Math.round(a[i]*100));for(let j=0;j<pr.n;j++){const w=pr.w[j];tw+=w;n.a.forEach((_,a)=>f[a]+=w*n.avg[a][j]);}
+ return {river:true,rn:n,p:n.p,a:n.a,pot:n.pot,toCall:n.toCall,c,f:f.map(x=>Math.round(x/(tw||1)*100)),idx:i};}
+function shDealRiver(h){const dead=new Set(h.board.concat(h.hero,h.vill)),deck=[];for(const r of SH_RANKS)for(const s of SH_SUITS)if(!dead.has(r+s))deck.push(r+s);
+ const card=deck[Math.floor(Math.random()*deck.length)];h.board.push(card);h.street=3;h.path.push(card);for(const v of h.range)if(v.c.includes(card))v.w=0;for(const v of h.hrange)if(v.c.includes(card))v.w=0;
+ h.log.push({street:3,txt:'Ривер '+shCardTxt(card)});h.node=null;h.rvProg=0;shRender();shRvThinking(h);
+ const P=shPot(h),S=Math.min(shLeft(h,'oop'),shLeft(h,'ip'));
+ shRvSolve(h,P,S,500,res=>{if(SH!==h)return;h.rv=res;h.rnode=res.root;shStep();});}
+
 // ---------- J. Little style analysis ----------
 const SHL={
  rangeDry:'Литтл всегда начинает со сравнения диапазонов, а не только своей руки. На сухой доске со старшей картой у рейзера из позиции преимущество диапазона, поэтому частая мелкая ставка приносит прибыль почти всем диапазоном.',
@@ -2968,10 +3027,12 @@ const SHL={
  air:'Блеф, по Литтлу, строится по диапазону соперника и ожидаемым фолдам, а не по желанию показать агрессию. Без эквити и полезных блокеров чаще сдавайся.',
  price:'Порог колла: ставка ÷ (банк + 2 ставки). MDF — не приказ платить любой рукой: против соперника, который мало блефует, Литтл советует фолдить чаще.',
  raise:'Против крупных линий у недоблефующих игроков Литтл фолдит чаще; против настоящего переблефа нужны более широкие коллы.',
+ river:'На ривере, по Литтлу, всё проще: ставь на вэлью, когда платят худшие руки (ориентир — полбанка и больше), блефуй руками без шоудауна и с полезными блокерами, а средние руки чаще чекай.',
+ riverCall:'Колл на ривере Литтл решает по цене и реальной частоте блефов соперника: против того, кто мало блефует, выкидывай чаще, против переблефующего — плати шире.',
  barrel:'Литтл: линия ставка–ставка–чек допустима. Ставка тёрна добирает и выбивает эквити, но плохая карта тёрна может остановить баррелинг.',
  xr:'Частота чек-рейза, по Литтлу, зависит от натсов и размера ставки соперника. Против слишком частого контбета чек-рейзи чаще.'};
 function shDecText(h,d,i,used){const me=h.heroSide,node=d.node,cls=d.cls,stack=h.stack,act=x=>shActName(x,node.pot,stack),tex=shTexture(d.board),inf=d.info,out=[];
- const street=d.street===1?'Флоп':'Тёрн',facing=node.toCall>0;
+ const street=['','Флоп','Тёрн','Ривер'][d.street],facing=node.toCall>0;
  out.push(`${street} ${d.board.map(shCardTxt).join(' ')} — ${tex.label} доска. У тебя ${h.hero.map(shCardTxt).join('')}: ${shHandText(inf)}.`);
  const prev=d.path.filter(x=>!shIsCard(x)),lastV=prev.length?prev[prev.length-1]:null;
  if(facing){const need=node.toCall/(node.pot+node.toCall);out.push(`${shName(h,me==='oop'?'ip':'oop')} ${shVerb(lastV,stack)}, банк ${node.pot}, тебе доплатить ${node.toCall}. Нужно ${Math.round(need*100)}% эквити${d.eq!=null?`, против его диапазона в этой линии у тебя около ${Math.round(d.eq*100)}%`:''}.`);}
@@ -2980,6 +3041,7 @@ function shDecText(h,d,i,used){const me=h.heroSide,node=d.node,cls=d.cls,stack=h
  const order=d.s.map((p,k)=>[p,k]).filter(x=>x[0]>=3).sort((a,b)=>b[0]-a[0]).map(([p,k])=>act(node.a[k])+' '+p+'%').join(', ');
  out.push(`Солвер с ${cls}: ${order}. Ты выбрал «${act(d.a).toLowerCase()}» (${d.s[d.k]}%) — ${d.grade===2?'это по солверу':d.grade===1?'допустимо, это часть смешанной стратегии':'ошибка, солвер почти так не играет'}.`);
  const sk=node.a[d.best][0],aggr=sk==='B'||sk==='R'||sk==='A',vAggr=prev.filter(x=>x[0]==='B'||x[0]==='R'||x[0]==='A').length,cands=[];
+ if(d.street===3)cands.push(facing?'riverCall':'river');
  if(facing&&vAggr>=2&&inf.tier<5)cands.push('raise');
  if(facing&&node.a.some(x=>x[0]==='R')&&(sk==='R'||sk==='A')&&inf.tier>=4)cands.push('xr');
  if(inf.tier>=4)cands.push(tex.dry||tex.paired?'strongDry':'strong');
