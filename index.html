@@ -2755,7 +2755,7 @@ function personalRender(){
  if(PERSONAL_ACTION==='linear'||PERSONAL_ACTION==='polar')PERSONAL_ACTION='vs';
  if(PERSONAL_ACTION==='guide'){
   const p=document.createElement('div');p.className='personal-guide';
-  const sections=[['Основа','Игра 2/5, 100 ББ, 10 игроков, без рейка. Диапазоны — чарты Джонатана Литтла для $2/$5 (8 игроков, 100 ББ), перенесённые на 10 игроков по числу игроков за спиной: UTG+2…BTN совпадают с его UTG…BTN, два добавочных ранних места сужены по его словам в видео. Это рабочая база без расчёта точного EV.'],['Open','Все до нас выбросили. На UTG–BTN — рейз до 15 или фолд. Диагональ «рейз / фолд» — руки, которые Литтл советует добавлять за живым столом: открывай их против пассивных и слабых, выкидывай против агрессивных за спиной. На SB — рейз до 15, лимп до 5 или фолд.'],['Raise/Call','Один опен до 15 без лимперов и коллеров. 3-бет: до 45 в позиции, до 65 без позиции; BB против SB — до 45. Диагональ «3-бет / колл» — по ситуации (например, KQo и AJo на BTN против раннего опена: 3-бет только против очень широко открывающегося). Диагональ «колл / фолд» — по ситуации; в блайндах против поздних опенов часть таких коллов добавлена за счёт отсутствия рейка.'],['Широкие опены','Если опен делает игрок с очень широким диапазоном (Закий, Андрей Зыков), тренажёр отвечает как против опена с более поздней позиции (не дальше CO). Это учтено в оценке.'],['Дешёвый вход в мультивей','Колл или оверлимп с мелкой парой, одномастным тузом или коннектором — отдельная стратегия. Нужны позиция, подходящая цена и возможность добрать. Лимпы, изоляция, сквизы и ответы на 3-/4-бет — в разделе «Продолжения».'],['Лимиты профилей','Наблюдения о друзьях — тенденции. Маша и Пивко за спиной могут получить сильные руки. Крупная ставка не раскрывает карты. При сомнении опираемся на общую базу.']];
+  const sections=[['Основа','Игра 2/5, 100 ББ, 10 игроков, без рейка. Диапазоны — чарты Джонатана Литтла для $2/$5 (8 игроков, 100 ББ), перенесённые на 10 игроков по числу игроков за спиной: UTG+2…BTN совпадают с его UTG…BTN, два добавочных ранних места сужены по его словам в видео. Это рабочая база без расчёта точного EV.'],['Open','Все до нас выбросили. На UTG–BTN — рейз до 15 или фолд. Диагональ «рейз / фолд» — руки, которые Литтл советует добавлять за живым столом: открывай их против пассивных и слабых, выкидывай против агрессивных за спиной. На SB — рейз до 15, лимп до 5 или фолд.'],['Raise/Call','Один опен до 15 без лимперов и коллеров. 3-бет: до 45 в позиции, до 65 без позиции; BB против SB — до 45. Диагональ «3-бет / колл» — по ситуации (например, KQo и AJo на BTN против раннего опена: 3-бет только против очень широко открывающегося). Диагональ «колл / фолд» — по ситуации; в блайндах против поздних опенов часть таких коллов добавлена за счёт отсутствия рейка.'],['Широкие опены','Если опен делает игрок с очень широким диапазоном, тренажёр отвечает как против опена с более поздней позиции (не дальше CO). Это учтено в оценке.'],['Дешёвый вход в мультивей','Колл или оверлимп с мелкой парой, одномастным тузом или коннектором — отдельная стратегия. Нужны позиция, подходящая цена и возможность добрать. Лимпы, изоляция, сквизы и ответы на 3-/4-бет — в разделе «Продолжения».'],['Лимиты профилей','Наблюдения об игроках — тенденции, а не правила. Тайтовый игрок за спиной может получить сильную руку. Крупная ставка не раскрывает карты. При сомнении опираемся на общую базу.']];
   for(const [title,text]of sections){const h=document.createElement('h3');h.textContent=title;const q=document.createElement('p');q.textContent=text;p.append(h,q);}
   const refs=document.createElement('p');refs.textContent='Литтл: ';for(const [title,url]of [['5 Preflop Tips — с 15:27','https://www.youtube.com/watch?v=ZKwlQdT6m00&t=927s'],['Preflop & Postflop HACKS — с 7:11','https://www.youtube.com/watch?v=Imfz_Cj1uVM&t=431s']]){const a=document.createElement('a');a.textContent=title;a.href=url;a.target='_blank';a.rel='noopener';refs.append(a,document.createTextNode(' · '));}p.append(refs);box.append(p);return;
  }
@@ -3264,37 +3264,66 @@ function petContext(h,p){const model=h.raisers.length?h.prof[h.raisers[0]].model
 function petChart(s){return chart({R:s.R.join(','),C:s.C.join(','),RC:(s.RC||[]).join(','),RF:s.RF.join(','),CF:s.CF.join(',')});}
 function petDecision(h,p){const c=petContext(h,p),policy=pcPolicy(PERSONAL_DATA,c);return {p,hand:h.players[p].h,pot:c.pot,kind:policy.kind,ch:petChart(policy),toCall:Math.max(0,h.curBet-h.players[p].bet),level:h.level,ip:policy.ip,op:h.raisers[0],canRaise:h.curBet<500&&!h.players[p].allin,curBet:h.curBet,callers:h.callers,minTo:Math.min(500,h.curBet+h.lastRaise),maxTo:500,personalSize:policy.raiseTo,policy,context:c};}
 function petRoster(){const index=PERSONAL_DATA.ownerIndex||0,a=PERSONAL_DATA.players.slice(index).concat(PERSONAL_DATA.players.slice(0,index)).map(p=>({...p}));if(PT_OPTIONS.random)for(let i=a.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[a[i],a[j]]=[a[j],a[i]];}return a;}
-function petCanLimp(h,p){return ['Катя','Даня','Андрей Зыков'].includes(h.prof[p].name);}
-// Opponent models. Every action has its own set: open-raise, open-limp, overlimp, isolation, call of a raise, 3-bet.
-// The sets are tendencies from the user's notes, not measured frequencies.
+function petKey(s){let h=5381;for(const c of String(s||''))h=(h*33+c.codePointAt(0))>>>0;return 'p'+h.toString(36);}
+function petCanLimp(h,p){return ['pz5eycg','pz5abud','p4s01b4'].includes(petKey(h.prof[p].name));}
+// Opponent models (04.11, v2). Strong core plays by profile without junk; weak players are wide, too passive or too aggressive,
+// and real junk appears only in limps. Players are keyed by a name hash (petKey).
+// Every action has its own set: open-raise, open-limp, overlimp, isolation, call of a raise, 3-bet.
+// Open sizes in % of hands by position (UTG … SB).
 const PET_WIDE_OPENERS=['wide','aggressive'];
-function petModel(h,p){const d=petDecision(h,p),m=h.prof[p].model||'base',s=d.policy,hand=h.players[p].h,H=pcHands;let raises=new Set(s.R),calls=new Set([...s.C,...(s.RC||[])]),optional=new Set(s.RF),size=d.personalSize;
- const add=(set,t)=>{for(const x of H(t))set.add(x);return set;},keep=(set,t)=>{const k=H(t);return new Set([...set].filter(x=>k.has(x)));},cheap=d.curBet<=25,mid=d.curBet<=70,limpers=h.callers>0;
+const PET_PROFILES={
+ 'pz5ghxl':{open:[7,8,9,10,11,13,18,28,22],no:'A2s-A8s,A2o-A9o,K2s-K8s,K2o-KTo,Q2s-Q8s,Q2o-QTo,J2s-J7s,J2o-JTo,T2s-T7s,T2o-T9o,97s,86s,76s,75s,65s,64s,54s,53s,43s',three:'QQ+,AKs,AKo',iso:'77+,ATs+,KJs+,QJs,AQo+'},
+ 'pna6rqc':{open:[8,9,10,11,12,15,22,38,30],no:'A2o-A7o,K2o-K8o,Q2o-Q9o,J2o-J8o,T2o-T8o,K2s-K5s,Q2s-Q7s,J2s-J7s,T2s-T6s,96s,85s,75s,74s,64s,63s,54s,53s,43s',three:'TT+,AQs+,AKo,KQs',iso:'66+,A9s+,KTs+,QTs+,JTs,AJo+,KQo'},
+ 'pz5f9xj':{open:[8,9,10,11,12,15,21,33,25],no:'A2o-A8o,K2o-K9o,Q2o-Q9o,J2o-J8o,T2o-T8o,K2s-K5s,Q2s-Q6s,J2s-J6s,T2s-T6s,96s,85s,74s,63s,53s,43s',three:'QQ+,AKs,AKo',iso:'77+,ATs+,KJs+,QJs,AQo+',extraCall:'JTo,T9o,98o'},
+ 'pnes653':{open:[10,11,12,15,20,25,35,50,50],no:'',three:'',iso:'22+,A8s+,ATo+,K9s+,KJo+,QTs+,JTs,T9s'}
+};
+// Order of hands for "top N %": first the tightest hero open chart that holds the hand (UTG … BTN, then the BTN border, then SB raise),
+// then a short list of reasonable wide hands by Chen score. Nothing else is ever raised: no junk.
+let PET_ORDER=null;
+function petChen(hc){const v={A:10,K:8,Q:7,J:6,T:5},r=c=>v[c]||Number(c)/2,a=hc[0],b=hc[1],R='AKQJT98765432';if(a===b)return Math.max(5,r(a)*2);let s=r(a);if(hc[2]==='s')s+=2;const gap=R.indexOf(b)-R.indexOf(a)-1;s-=gap<=0?0:gap===1?1:gap===2?2:gap===3?4:5;if(gap<=1&&R.indexOf(a)>R.indexOf('Q'))s+=1;return s;}
+function petOrder(){if(PET_ORDER)return PET_ORDER;const R='AKQJT98765432',all=[];for(let i=0;i<13;i++)for(let j=0;j<13;j++)all.push(i===j?R[i]+R[j]:i<j?R[i]+R[j]+'s':R[j]+R[i]+'o');
+ const tiers=[...['UTG','UTG+1','UTG+2','UTG+3','LJ','HJ','CO','BTN'].map(p=>pcHands(PERSONAL_DATA.open[p])),pcHands(PERSONAL_DATA.openBorder&&PERSONAL_DATA.openBorder.BTN),pcHands(PERSONAL_DATA.sb.R)],tier=hc=>{const k=tiers.findIndex(t=>t.has(hc));return k<0?tiers.length:k;};
+ return PET_ORDER=all.sort((x,y)=>tier(x)-tier(y)||petChen(y)-petChen(x));}
+const PET_WIDE_EXTRA='A2o+,K8o+,Q9o+,J9o+,T9o,K2s+,Q5s+,J7s+,T7s+,97s+,86s+,75s+,64s+,53s+,43s,22+';
+function petTop(pct,no){const ex=pcHands(no||''),ok=new Set([...petPlayable(),...pcHands(PET_WIDE_EXTRA)]),out=new Set();let n=0;const goal=pct/100*1326;for(const hc of petOrder()){if(n>=goal)break;if(ex.has(hc)||!ok.has(hc))continue;out.add(hc);n+=hc.length===2?6:hc[2]==='s'?4:12;}return out;}
+// Junk for raises and calls of a raise: outside every hero open chart, its border and the SB chart.
+function petPlayable(){if(!petPlayable.s){const s=new Set();for(const v of Object.values(PERSONAL_DATA.open))for(const x of pcHands(v))s.add(x);for(const v of Object.values(PERSONAL_DATA.openBorder||{}))for(const x of pcHands(v))s.add(x);for(const x of pcHands(PERSONAL_DATA.sb.R))s.add(x);petPlayable.s=s;}return petPlayable.s;}
+function petModel(h,p){const d=petDecision(h,p),name=petKey(h.prof[p].name),m=h.prof[p].model||'base',prof=PET_PROFILES[name],s=d.policy,hand=h.players[p].h,H=pcHands;let raises=new Set(s.R),calls=new Set([...s.C,...(s.RC||[])]),optional=new Set(s.RF),size=d.personalSize;
+ const add=(set,t)=>{for(const x of H(t))set.add(x);return set;},keep=(set,t)=>{const k=H(t);return new Set([...set].filter(x=>k.has(x)));},drop=(set,t)=>{const k=H(t);return new Set([...set].filter(x=>!k.has(x)));},cheap=d.curBet<=25,mid=d.curBet<=70,limpers=h.callers>0,first=h.level===0&&!limpers&&p!==9;
+ // SB first in: Little's SB mixes raise and limp. A player who never limps raises the stronger part of the limp range and folds the rest.
+ const sbRaise=()=>new Set([...s.R,...[...s.C].filter(x=>H(PERSONAL_DATA.open.CO+','+((PERSONAL_DATA.openBorder||{}).CO||'')).has(x))]);
  if(h.level===0){
-  if(m==='tight'||m==='tight-passive'){raises=keep(raises,'66+,ATs+,KTs+,QTs+,JTs,AJo+,KQo');optional.clear();}
-  else if(m==='base-wide'||m==='wide-aggressive'){for(const x of optional)raises.add(x);optional.clear();}
-  else if(m==='wide'){for(const x of optional)raises.add(x);add(raises,limpers?'22+,A8s+,ATo+,K9s+,KJo+,QTs+,JTs,T9s':'22+,A2s+,A9o+,K8s+,KTo+,Q9s+,QTo+,J9s+,JTo,T8s+,98s,87s,76s');optional.clear();}
+  if(prof&&first){raises=petTop(prof.open[Math.min(p,8)],prof.no);calls.clear();optional.clear();}
+  else if(prof&&limpers){raises=name==='pnes653'?add(new Set(s.R),prof.iso):keep(new Set([...s.R,...H(prof.iso)]),prof.iso);optional.clear();}
+  else if(m==='base'){if(first&&p===8){raises=sbRaise();calls.clear();}}
+  else if(m==='base-wide'||m==='wide-aggressive'){if(first&&p===8)raises=sbRaise();for(const x of optional)raises.add(x);if(m==='wide-aggressive'&&first)add(raises,'A2s+,K9s+,QTs+,J9s+,T9s,98s,87s,ATo+,KJo+');optional.clear();}
   else if(m==='aggressive'){
-   // Andrey Zykov: open-raise, open-limp and overlimp are different sets; all suited queens are raised first in.
+   // Aggressive model: open-raise, open-limp and overlimp are different sets; all suited queens are raised first in.
    const open=H('22+,A2s+,A8o+,K5s+,KTo+,Q2s+,QTo+,J8s+,JTo,T8s+,97s+,86s+,75s+,65s,54s'),limp=H('A2o-A7o,K2s-K4s,K8o-K9o,Q9o,J9o,J7s,T9o,T7s,96s,85s,74s,64s,53s,43s,98o,87o,76o');
    if(!limpers){raises=open;calls=limp;}else{raises=H('55+,A8s+,ATo+,KTs+,KJo+,Q9s+,QJo,J9s+,T9s');calls=new Set([...open,...limp].filter(x=>!raises.has(x)));}optional.clear();}
   else if(m==='station'){raises=H('QQ+,AKs,AKo');calls=H('22+,A2s+,A2o+,K2s+,K5o+,Q2s+,Q7o+,J2s+,J7o+,T2s+,T7o+,92s+,97o+,82s+,87o,72s+,76o,62s+,65o,52s+,54o,43s,52o,92o');optional.clear();}
   else if(m==='passive'){raises=H('KK+,AKs');calls=H('22+,A2s+,A2o+,K2s+,K8o+,Q5s+,Q9o+,J7s+,J9o+,T7s+,T9o,97s+,98o,86s+,87o,75s+,76o,65s,54s,43s,53o');optional.clear();}
  }else if(h.level===1){
-  if(m==='tight'||m==='tight-passive'){raises=H('QQ+,AKs');calls=add(calls,'JJ,TT,AQs,AKo');optional.clear();}
+  const chartCalls=new Set([...s.C,...(s.RC||[]),...s.CF]);
+  if(name==='pz5ghxl'||name==='pna6rqc'){raises=keep(raises,prof.three);calls=drop(new Set([...s.C,...(s.RC||[]),...[...s.R].filter(x=>!raises.has(x))]),prof.no);optional.clear();}
+  else if(name==='pz5f9xj'){raises=H(prof.three);calls=drop(new Set([...chartCalls,...s.R,...H(prof.extraCall)]),prof.no);if(!cheap)calls=drop(calls,prof.extraCall);optional.clear();}
+  else if(name==='pnes653'){add(raises,'A5s');calls=new Set([...chartCalls,...H(cheap?'22+,A2s+,KTs+,QTs+,JTs,T9s,98s,AJo+,KQo':'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo')]);}
   else if(m==='station'){raises=H('KK+,AKs');calls=H(cheap?'22+,A2s+,ATo+,K9s+,KJo+,Q9s+,QJo,J9s+,T8s+,98s,87s,76s,65s,54s':mid?'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo':'TT+,AQs+,AKo');optional.clear();}
   else if(m==='passive'){raises=H('KK+');calls=H(cheap?'22+,A2s+,A9o+,K8s+,KTo+,Q9s+,QTo+,J9s+,JTo,T8s+,98s,87s,76s,65s':mid?'66+,ATs+,KJs+,QJs,AQo+':'TT+,AKs,AKo');optional.clear();}
-  else if(m==='aggressive'){add(raises,'A5s,A4s,K9s,Q9s');for(const x of s.CF)calls.add(x);add(calls,cheap?'22+,A2s+,ATo+,K9s+,KJo+,Q9s+,J9s+,T8s+,98s,87s,76s,65s':'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo');}
-  else if(m==='wide-aggressive'){add(raises,'A5s,A4s');for(const x of s.CF)calls.add(x);add(calls,'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo');}
-  else if(m==='wide'){add(raises,'A5s');for(const x of s.CF)calls.add(x);add(calls,'22+,A2s+,KTs+,QTs+,JTs,T9s,98s,AJo+,KQo');}
-  else for(const x of s.CF)calls.add(x);
+  else if(m==='aggressive'){add(raises,'A5s,A4s,K9s,Q9s');for(const x of chartCalls)calls.add(x);add(calls,cheap?'22+,A2s+,ATo+,K9s+,KJo+,Q9s+,J9s+,T8s+,98s,87s,76s,65s':'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo');}
+  else if(m==='wide-aggressive'){add(raises,'A5s-A2s,KJs,QJs,AJo,KQo');for(const x of chartCalls)calls.add(x);add(calls,'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo');}
+  else if(m==='base-wide')for(const x of chartCalls)calls.add(x);
+  // Calls of a raise: no junk for anyone except the base chart itself (Little's no-rake BB defence).
+  if(m!=='base'){const ok=petPlayable();calls=new Set([...calls].filter(x=>ok.has(x)));raises=new Set([...raises].filter(x=>ok.has(x)));}
  }else{
-  if(m==='tight'||m==='tight-passive'||m==='passive'){raises=H('KK+');calls=H(h.curBet>160?'QQ,AKs,AKo':'JJ,QQ,AQs,AKs,AKo');optional.clear();}
+  if(name==='pz5ghxl'||name==='pz5f9xj'||m==='tight'||m==='tight-passive'||m==='passive'){raises=H('KK+');calls=H(h.curBet>160?'QQ,AKs,AKo':'JJ,QQ,AQs,AKs,AKo');optional.clear();}
+  else if(name==='pna6rqc'){raises=H('KK+,AKs');calls=H(h.curBet>160?'QQ,AKo':'TT,JJ,QQ,AQs,AKo');optional.clear();}
+  else if(name==='pnes653'){raises=H('KK+');add(optional,'A5s');calls=H(h.curBet>160?'QQ,JJ,AKs,AKo':'88+,AQs+,AQo+');}
   else if(m==='station'||m==='wide'){raises=H('KK+');calls=H(h.curBet>160?'QQ,AKs,AKo':'88+,AQs+,AQo+');optional.clear();}
   else if(m==='aggressive'){add(optional,'A5s,A4s');}
  }
  for(const x of raises)calls.delete(x);
- // Zykov: explicit user correction — no 53o/52o anywhere.
+ // Aggressive model: explicit user correction — no 53o/52o anywhere.
  if(m==='aggressive')for(const x of ['53o','52o']){raises.delete(x);calls.delete(x);optional.delete(x);}
  if(h.curBet>=500){raises.clear();calls=new Set([...calls].filter(x=>pcHands('QQ+,AKs,AKo').has(x)));optional.clear();}
  // A call at level zero is a limp or overlimp, never a call of a raise.
