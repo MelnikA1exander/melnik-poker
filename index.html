@@ -447,7 +447,7 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 /* Personal responsive layout */
 #personal-content,.personal-grid-list,.personal-card .gridblock{min-width:0}#personal-content>.controls{flex-wrap:wrap;justify-content:flex-start;margin:12px 0}#personal-content .gridwrap{min-width:0;width:100%}#personal-content .range-matrix{min-width:0}.premium-tag{font-size:9px;border:1px solid currentColor;border-radius:4px;padding:1px 3px;margin-left:4px;text-transform:uppercase}.personal-tabs{flex-wrap:wrap}
 
-.pt-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0}.pt-actions button{min-width:95px;min-height:46px}.personal-training-filters{display:grid;gap:16px}.pt-check{display:flex;gap:10px;align-items:center;line-height:1.4}.pt-check input{accent-color:var(--orange);width:18px;height:18px}.personal-training-filters[hidden]{display:none!important}.personal-training-filters select{max-width:65%}body:has(#s-ind[aria-pressed="true"]) #table .seat .pos{font-size:11px}@media(max-width:520px){body:has(#s-ind[aria-pressed="true"]) #table .seat:not(.hero){width:80px}body:has(#s-ind[aria-pressed="true"]) #table .seat:not(.hero) .pos{font-size:9px}}
+.pt-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0}.pt-actions button{min-width:95px;min-height:46px}.personal-training-filters{display:grid;gap:16px}.pt-check{display:flex;gap:10px;align-items:center;line-height:1.4}.pt-check input{accent-color:var(--orange);width:18px;height:18px}.personal-training-filters[hidden]{display:none!important}.personal-training-filters select{max-width:65%}body:has(#s-ind[aria-pressed="true"],#s-lit[aria-pressed="true"]) #table .seat .pos{font-size:11px}@media(max-width:520px){body:has(#s-ind[aria-pressed="true"],#s-lit[aria-pressed="true"]) #table .seat:not(.hero){width:80px}body:has(#s-ind[aria-pressed="true"],#s-lit[aria-pressed="true"]) #table .seat:not(.hero) .pos{font-size:9px}}
 
 /* Session toolbar */
 .ctl2{justify-content:space-between;gap:12px;min-height:40px;flex-wrap:nowrap}.ctl2 #sessline{margin:0;margin-right:auto;padding:9px 13px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:12px;line-height:1.3;cursor:default;min-width:0}.ctl2 #sessline:empty{visibility:hidden}.ctl2 #training-filters-button{margin-left:auto;flex-shrink:0}.playcontrols:has(>#restart[hidden]){display:none}.ctl2 #sessline b{font-weight:700}
@@ -522,6 +522,7 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
     <button class="helpbtn" id="restart" type="button" hidden>Рестарт</button>
     <div class="seg" id="style">
       <button id="s-gto" aria-pressed="true">GTO</button>
+      <button id="s-lit" class="locked" aria-pressed="false" aria-disabled="true" title="Premium">Литтл 100</button>
       <button id="s-ind" class="locked" aria-pressed="false" aria-disabled="true" title="Скоро">Индивидуальный <span class="soon">скоро</span></button>
     </div>
     <div id="gto-model-controls" class="controls">
@@ -2679,10 +2680,14 @@ function openHelp(){
 }
 $('#help').onclick=openHelp;
 let STYLE='gto';
-function setMode(m){ if(m!=='ind'&&typeof petLeave==='function')petLeave(); STYLE=m; MODE=REC?'gto':m; S.mode=m; save(); $('#s-gto').setAttribute('aria-pressed',m==='gto'); $('#s-ind').setAttribute('aria-pressed',m==='ind'); }
+// LIT: the personal 2/5 flow against ideal bots that play the same Little charts (default for Premium accounts).
+let LIT=false;
+function setMode(m){ if(m!=='ind'&&typeof petLeave==='function')petLeave(); STYLE=m; MODE=REC?'gto':m; S.mode=m; save(); $('#s-gto').setAttribute('aria-pressed',m==='gto'); $('#s-ind').setAttribute('aria-pressed',m==='ind'&&!LIT); $('#s-lit').setAttribute('aria-pressed',m==='ind'&&LIT); }
+function setPersonalBots(lit){ if(!personalOwner())return; if(GAME!=='pre')setGame('pre'); const changed=LIT!==lit||STYLE!=='ind'; if(changed&&STYLE==='ind'&&typeof petLeave==='function')petLeave(); LIT=lit; setMode('ind'); ptRefreshUi(); $('#training-filters').close(); idle(); }
 $('#s-gto').onclick=()=>{ setMode('gto'); ptRefreshUi(); updScore(); renderStats(); idle(); };
 // Personal mode is server-authorized, not unlocked by repeated taps.
-$('#s-ind').onclick=()=>{if(!personalOwner()||GAME!=='pre')return;setMode('ind');ptRefreshUi();$('#training-filters').close();idle();};
+$('#s-ind').onclick=()=>setPersonalBots(false);
+$('#s-lit').onclick=()=>setPersonalBots(true);
 $('#m-prof').onclick=()=>{ setGame('prof'); idle(); };
 $('#m-pre').onclick=()=>{ setGame('pre'); idle(); };
 $('#m-hand').onclick=()=>{ setGame('hand'); idle(); };
@@ -2852,7 +2857,10 @@ function showApp(response){
   personalRefresh();
   $('#auth').hidden=true; $('#app').hidden=false;
   if(AUTH){ S.player=AUTH.login; save(); }
-  RUN=null; idle(); updScore(); activateAccountSettings(response);
+  RUN=null;
+  // Little 100 vs ideal bots is the default preflop mode for Premium accounts.
+  if(personalOwner()){ LIT=true; setGame('pre'); setMode('ind'); ptRefreshUi(); }
+  idle(); updScore(); activateAccountSettings(response);
 }
 function authUpd(){ const ok=$('#alogin').value.trim()&&$('#apass').value; $('#abtn-login').disabled=!ok; if(AMODE==='reg') $('#abtn-reg').disabled=!ok; else $('#abtn-reg').disabled=false; }
 $('#alogin').oninput=$('#apass').oninput=e=>{ if(e.target.getAttribute('aria-invalid')==='true'){ e.target.setAttribute('aria-invalid','false'); if(!document.querySelector('.authcard [aria-invalid="true"]')) $('#autherr').textContent=''; } authUpd(); };
@@ -3128,7 +3136,8 @@ function ptGrid(q){const block=gridEl({d:{ch:q.ch,kind:q.kind},h:q.hand});block.
 function ptKey(){return 'melnik-personal-training:'+AUTH.login.trim().toLowerCase();}
 function ptPersist(){try{localStorage.setItem(ptKey(),JSON.stringify({rows:PT.rows.slice(-500),pending:PT.pending,options:PT_OPTIONS}));}catch(e){PT.status='Не удалось сохранить на устройстве';}}
 function ptRefreshUi(){
- const b=$('#s-ind'),owner=personalOwner();b.innerHTML='Индивидуальный <span class="premium-tag">Premium</span>';b.classList.toggle('locked',!owner);b.setAttribute('aria-disabled',String(!owner));b.title=owner?'Персональная тренировка 10-max / 125 ББ':'Premium — пока недоступно';
+ const b=$('#s-ind'),owner=personalOwner();b.innerHTML='Индивидуальный <span class="premium-tag">Premium</span>';b.classList.toggle('locked',!owner);b.setAttribute('aria-disabled',String(!owner));b.title=owner?'Против моделей друзей: 2/5, 100 ББ, 10 игроков':'Premium — пока недоступно';
+ const l=$('#s-lit');if(l){l.innerHTML='Литтл 100 <span class="premium-tag">Premium</span>';l.classList.toggle('locked',!owner);l.setAttribute('aria-disabled',String(!owner));l.title=owner?'Чарты Литтла 2/5, 100 ББ, опен 15, 10 игроков: соперники играют по тем же чартам':'Premium — пока недоступно';}
  const on=personalTraining(),fields=$('#personal-training-filters');if(fields)fields.hidden=!on;
  $('#gto-model-controls').hidden=on||!['prof','pre'].includes(GAME);$('#players').closest('label').hidden=on;
  if(!owner){PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};}
@@ -3263,7 +3272,9 @@ function pcAllowed(policy,hand,toCall){let acts=policy.R.includes(hand)?['R']:po
 function petContext(h,p){const model=h.raisers.length?h.prof[h.raisers[0]].model:null,c={p,level:h.level,curBet:h.curBet,bet:h.players[p].bet,pot:potOf(h),lastRaise:h.lastRaise,callers:h.callers,raisers:h.raisers.slice(),rangeMode:'base'};if(p===h.hero&&h.level===1&&PET_WIDE_OPENERS.includes(model))c.openerWide=true;return c;}
 function petChart(s){return chart({R:s.R.join(','),C:s.C.join(','),RC:(s.RC||[]).join(','),RF:s.RF.join(','),CF:s.CF.join(',')});}
 function petDecision(h,p){const c=petContext(h,p),policy=pcPolicy(PERSONAL_DATA,c);return {p,hand:h.players[p].h,pot:c.pot,kind:policy.kind,ch:petChart(policy),toCall:Math.max(0,h.curBet-h.players[p].bet),level:h.level,ip:policy.ip,op:h.raisers[0],canRaise:h.curBet<500&&!h.players[p].allin,curBet:h.curBet,callers:h.callers,minTo:Math.min(500,h.curBet+h.lastRaise),maxTo:500,personalSize:policy.raiseTo,policy,context:c};}
-function petRoster(){const index=PERSONAL_DATA.ownerIndex||0,a=PERSONAL_DATA.players.slice(index).concat(PERSONAL_DATA.players.slice(0,index)).map(p=>({...p}));if(PT_OPTIONS.random)for(let i=a.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[a[i],a[j]]=[a[j],a[i]];}return a;}
+// Little 100 mode: every opponent is the base Little model (no profiles, no limps), only the hero keeps the name.
+function petIdealRoster(){const index=PERSONAL_DATA.ownerIndex||0,me={...PERSONAL_DATA.players[index]};return [me,...Array.from({length:9},(_,i)=>({name:'Бот',model:'base',note:'',ideal:true}))];}
+function petRoster(){if(typeof LIT!=='undefined'&&LIT)return petIdealRoster();const index=PERSONAL_DATA.ownerIndex||0,a=PERSONAL_DATA.players.slice(index).concat(PERSONAL_DATA.players.slice(0,index)).map(p=>({...p}));if(PT_OPTIONS.random)for(let i=a.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[a[i],a[j]]=[a[j],a[i]];}return a;}
 function petKey(s){let h=5381;for(const c of String(s||''))h=(h*33+c.codePointAt(0))>>>0;return 'p'+h.toString(36);}
 function petCanLimp(h,p){return ['pz5eycg','pz5abud','p4s01b4'].includes(petKey(h.prof[p].name));}
 // Opponent models (04.11, v2). Strong core plays by profile without junk; weak players are wide, too passive or too aggressive,
@@ -3331,6 +3342,8 @@ function petModel(h,p){const d=petDecision(h,p),name=petKey(h.prof[p].name),m=h.
  return {d,raises,calls,optional,hand,size};
 }
 function petBot(h,p){const b=petModel(h,p),d=b.d,m=h.prof[p].model;let action=b.raises.has(b.hand)?'R':b.calls.has(b.hand)?(d.toCall?'C':'X'):b.optional.has(b.hand)?(Math.random()<.35?'R':d.toCall?'F':'X'):d.toCall?'F':'X';
+ // Ideal bots: border cells are mixed. Call/fold cells are called 35% of the time, raise/call cells are raised 30%.
+ if(h.prof[p].ideal&&d.toCall){const cf=new Set(d.policy.CF||[]),rc=new Set(d.policy.RC||[]);if(action==='F'&&cf.has(b.hand)&&Math.random()<.35)action='C';else if(action==='C'&&rc.has(b.hand)&&Math.random()<.3)action='R';}
  // Rare slow-played premium limp; ordinary raising hands are never limped.
  if(action==='R'&&h.level===0&&!h.callers&&petCanLimp(h,p)&&['AA','KK'].includes(b.hand)&&Math.random()<.15)action='C';
  if(action==='R'&&!d.canRaise)action=d.toCall?'C':'X';if(action==='C'&&!d.toCall)action='X';apply(h,p,action,action==='R'?b.size:0);
