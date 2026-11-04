@@ -454,6 +454,9 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 
 /* Profile mode selector */
 .pt-prior{margin-top:12px}.pt-prior summary{cursor:pointer;padding:10px;border:1px solid var(--line);border-radius:10px}
+
+/* Solver view */
+.solver-content p{line-height:1.5}.svspots,.svacts,.svturns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.svspots .rngtab,.svacts .rngtab,.svturns .rngtab{width:auto;min-height:36px}.svhead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}.svcard{transform:scale(.8)}.svcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:13px}.svinfo{font-size:13px;color:var(--muted)}.svbar{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0}.svbar span{display:block;height:100%}.svgrid .cell.svout{opacity:.35}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -499,7 +502,7 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
   </div>
 
   <section class="ranges" id="ranges" hidden>
-<div class="controls personal-tabs"><button id="rng-standard" class="rngtab" type="button" aria-pressed="true">Общие</button><button id="rng-personal" class="rngtab" type="button" aria-pressed="false" aria-disabled="true">Персональные <span class="premium-tag">Premium</span></button></div><div id="personal-content" hidden></div><div id="standard-ranges">
+<div class="controls personal-tabs"><button id="rng-standard" class="rngtab" type="button" aria-pressed="true">Общие</button><button id="rng-personal" class="rngtab" type="button" aria-pressed="false" aria-disabled="true">Персональные</button><button id="rng-solver" class="rngtab" type="button" aria-pressed="false">Солвер</button></div><div id="personal-content" hidden></div><div id="solver-content" class="solver-content" hidden></div><div id="standard-ranges">
     <div class="controls rngctl">
       <button type="button" class="rngtab anybtn" id="rng-any" aria-pressed="false">Any range</button>
       <label class="sizesel" for="rng-stack">Стек <select id="rng-stack"><option value="100" selected>100 ББ</option><option value="125" disabled>125 ББ — скоро</option><option value="150" disabled>150 ББ — скоро</option></select></label>
@@ -522,7 +525,7 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
     <button class="helpbtn" id="restart" type="button" hidden>Рестарт</button>
     <div class="seg" id="style">
       <button id="s-gto" aria-pressed="true">GTO</button>
-      <button id="s-lit" class="locked" aria-pressed="false" aria-disabled="true" title="Premium">Литтл 100</button>
+      <button id="s-lit" aria-pressed="false">J. Little</button>
       <button id="s-ind" class="locked" aria-pressed="false" aria-disabled="true" title="Скоро">Индивидуальный <span class="soon">скоро</span></button>
     </div>
     <div id="gto-model-controls" class="controls">
@@ -730,7 +733,7 @@ const LABELS={8:['UTG','UTG+1','LJ','HJ','CO','BTN','SB','BB'],9:['UTG','UTG+1',
 let STACK=400; let BB=4, SBA=2;
 const stackFor=()=>MODE==='ind'?500:400;
 let N=8;
-const lab=i=>personalTraining()?PT_POS[i]:LABELS[N][i];
+const lab=i=>personalTraining()?(typeof petPos==='function'?petPos(i):PT_POS[i]):LABELS[N][i];
 const btnIdx=()=>N-3;
 const dist=i=>btnIdx()-i; // 0 = BTN; для блайндов отрицательное
 const isSB=i=>i===N-2, isBB=i=>i===N-1;
@@ -1134,7 +1137,7 @@ function sndLog(h){ const root=h.anim?Object.getPrototypeOf(h):h, L=h.log.length
   if(fresh.some(e=>e.a==='C'||e.a==='R')) setTimeout(sndChips,fresh.some(e=>e.a==='F')?90:0); }
 function sndHeroTurn(h){ const k=h.street+':'+h.log.length; if(SND.hand===h&&SND.turn===k) return; SND.turn=k; sndTurn(); }
 // ===================== rendering =====================
-function seatXY(k){ const ang=Math.PI/2+k*2*Math.PI/N; const rx=window.innerWidth<520?38:44; return [50+rx*Math.cos(ang),50+41*Math.sin(ang)]; }
+function seatXY(k,n=N){ const ang=Math.PI/2+k*2*Math.PI/n; const rx=window.innerWidth<520?38:44; return [50+rx*Math.cos(ang),50+41*Math.sin(ang)]; }
 function render(){ if(H&&H.personalFlow)return petRender(); renderTable(); if(H.over) renderEnd(); else renderActions(); }
 function renderTable(h=H){
   const t=$('#table'); t.innerHTML=''; try{ sndLog(h); }catch(e){}
@@ -1148,7 +1151,8 @@ function renderTable(h=H){
   felt.append(pl,board); rail.appendChild(felt); t.appendChild(rail);
   if(canBack(h)){ const bb=document.createElement('button'); bb.type='button'; bb.className='backbtn'; bb.id='back'; bb.innerHTML='<span aria-hidden="true">←</span> Предыдущая раздача'; bb.onclick=goBack; t.appendChild(bb); }
   for(const p of h.players){
-    const i=p.i, k=(i-h.hero+N)%N, [x,y]=seatXY(k);
+    if(p.absent) continue;
+    const SN=h.seatN||N, i=p.i, k=(i-h.hero+SN)%SN, [x,y]=seatXY(k,SN);
     const s=document.createElement('div'); s.className='seat'; s.style.left=x+'%'; s.style.top=y+'%';
     if(i===h.hero){ s.classList.add('hero'); const hd=document.createElement('div'); hd.className='hand'; p.cards.forEach(c=>hd.appendChild(cardEl(c,'big'))); if(h.over&&!REC||h.personalFlow&&!h.anim&&PT_OPTIONS.hints) hd.appendChild(plusBtn(i)); if(h.over&&!REC&&h.eqRange!=null&&h.eq){ const e=document.createElement('span'); e.className='eq'; e.title='Твоё эквити против диапазонов соперников'; e.textContent=pctS(h.eqRange); s.appendChild(e); } s.appendChild(hd); }
     else if(!p.folded){ const mini=document.createElement('div'); mini.className='mini';
@@ -1842,7 +1846,7 @@ function postBlock(h,x,i){
 function setGame(g){ if(g!=='pre'&&STYLE==='ind')setMode('gto'); showRanges(false);
   if(g==='prof'&&!REC){ SAVEDF=filter; filter='all'; } else if(g!=='prof'&&REC){ filter=SAVEDF; }
   $('#gto-model-controls').hidden=!['prof','pre'].includes(g); GAME=g; REC=g==='prof'; MODE=REC?'gto':STYLE; $('#m-prof').setAttribute('aria-pressed',g==='prof'); $('#m-pre').setAttribute('aria-pressed',g==='pre'); $('#m-hand').setAttribute('aria-pressed',g==='hand');
-  if(g==='pre'&&STYLE==='ind'&&!personalOwner())setMode('gto');
+  if(g==='pre'&&STYLE==='ind'&&!personalTraining())setMode('gto');
   ptRefreshUi();
   $('#style').classList.toggle('hide',REC); $('#filters').classList.toggle('hide',REC); $('#stats').hidden=g!=='pre'; updScore();
 
@@ -2683,7 +2687,7 @@ let STYLE='gto';
 // LIT: the personal 2/5 flow against ideal bots that play the same Little charts (default for Premium accounts).
 let LIT=false;
 function setMode(m){ if(m!=='ind'&&typeof petLeave==='function')petLeave(); STYLE=m; MODE=REC?'gto':m; S.mode=m; save(); $('#s-gto').setAttribute('aria-pressed',m==='gto'); $('#s-ind').setAttribute('aria-pressed',m==='ind'&&!LIT); $('#s-lit').setAttribute('aria-pressed',m==='ind'&&LIT); }
-function setPersonalBots(lit){ if(!personalOwner())return; if(GAME!=='pre')setGame('pre'); const changed=LIT!==lit||STYLE!=='ind'; if(changed&&STYLE==='ind'&&typeof petLeave==='function')petLeave(); LIT=lit; setMode('ind'); ptRefreshUi(); $('#training-filters').close(); idle(); }
+function setPersonalBots(lit){ if(!AUTH||!AUTH.token||!lit&&!personalOwner())return; if(GAME!=='pre')setGame('pre'); const changed=LIT!==lit||STYLE!=='ind'; if(changed&&STYLE==='ind'&&typeof petLeave==='function')petLeave(); LIT=lit; setMode('ind'); ptRefreshUi(); $('#training-filters').close(); idle(); }
 $('#s-gto').onclick=()=>{ setMode('gto'); ptRefreshUi(); updScore(); renderStats(); idle(); };
 // Personal mode is server-authorized, not unlocked by repeated taps.
 $('#s-ind').onclick=()=>setPersonalBots(false);
@@ -2793,6 +2797,66 @@ async function personalLoad(){
  if(PERSONAL_VIEW&&personalOwner()&&AUTH.token===token&&PERSONAL_DATA)personalRender();
 }
 
+// SOLVER-VIEW START
+// Solver hand analysis (Ranges → «Солвер»). Data: solver/index.json + per spot flop.json and t-<card>.json,
+// produced by compact.cjs + split-solver.cjs from TexasSolver runs on 2/5, 100 BB. Strategy per hand class,
+// range-weighted action frequencies, borderline hands (mixed strategy). No range charts are embedded here.
+let SOLVER_VIEW=false,SVS={index:null,spot:null,flop:null,turns:{},path:[],loading:false,err:''};
+const SV_BASE='solver/';
+async function svJson(url){const r=await fetch(SV_BASE+url,{cache:'force-cache'});if(!r.ok)throw Error(url+' '+r.status);return r.json();}
+function svSelect(on){
+ SOLVER_VIEW=!!on;$('#rng-solver').setAttribute('aria-pressed',String(SOLVER_VIEW));$('#solver-content').hidden=!SOLVER_VIEW;
+ if(SOLVER_VIEW){$('#rng-standard').setAttribute('aria-pressed','false');$('#rng-personal').setAttribute('aria-pressed','false');$('#personal-content').hidden=true;$('#standard-ranges').hidden=true;svRender();}
+}
+{const base=personalSelect;personalSelect=function(on){if(SOLVER_VIEW){SOLVER_VIEW=false;$('#rng-solver').setAttribute('aria-pressed','false');$('#solver-content').hidden=true;}return base(on);};}
+const SV_NAMES={X:'Чек',C:'Колл',F:'Фолд',A:'Олл-ин'};
+function svActName(a,pot){const k=a[0],n=+a.slice(1);if(k==='B'||k==='R'){const pct=Math.round(n/pot*100);return (k==='B'?'Ставка ':'Рейз до ')+n+(k==='B'?' ('+pct+'%)':'');}return SV_NAMES[k]||a;}
+function svColor(a,i,acts){const k=a[0];if(k==='F')return 'var(--fold)';if(k==='X'||k==='C')return 'var(--call)';if(k==='A')return '#7a1f1f';
+ const bets=acts.filter(x=>x[0]==='B'||x[0]==='R'),j=bets.indexOf(a);return ['#f0a35e','#e07a2e','#b5521b','#8c3a12'][Math.min(3,j)];}
+function svNode(path){const key=path.join('/');if(SVS.flop&&SVS.flop.nodes[key])return SVS.flop.nodes[key];const card=path.find(x=>/^[2-9TJQKA][shdc]$/.test(x));return card&&SVS.turns[card]?SVS.turns[card].nodes[key]:null;}
+function svWho(p){return p==='oop'?SVS.spot.oop:SVS.spot.ip;}
+async function svOpen(id){SVS.loading=true;SVS.err='';SVS.path=[];SVS.turns={};svRender();try{SVS.spot=SVS.index.spots.find(s=>s.id===id);SVS.flop=await svJson(id+'/flop.json');}catch(e){SVS.err='Не удалось загрузить разбор.';}SVS.loading=false;svRender();}
+async function svTurn(card){if(!SVS.turns[card]){SVS.loading=true;svRender();try{SVS.turns[card]=await svJson(SVS.spot.id+'/t-'+card+'.json');}catch(e){SVS.err='Не удалось загрузить тёрн '+card+'.';}SVS.loading=false;}SVS.path.push(card);svRender();}
+function svCards(s){return s.match(/../g).map(c=>{const e=cardEl(c);e.classList.add('svcard');return e;});}
+function svGrid(node){const R='AKQJT98765432',g=document.createElement('div');g.className='grid svgrid';
+ for(let i=0;i<13;i++)for(let j=0;j<13;j++){const hc=i===j?R[i]+R[j]:i<j?R[i]+R[j]+'s':R[j]+R[i]+'o',cell=document.createElement('div');cell.className='cell';cell.textContent=hc;const s=node.c[hc];
+  if(s){let acc=0;const stops=[];s.forEach((p,k)=>{if(!p)return;const col=svColor(node.a[k],k,node.a);stops.push(`${col} ${acc}% ${acc+p}%`);acc+=p;});cell.style.background=`linear-gradient(90deg,${stops.join(',')})`;cell.style.color='#fff';cell.title=hc+': '+node.a.map((a,k)=>svActName(a,node.pot)+' '+s[k]+'%').join(', ');}
+  else cell.classList.add('svout');g.append(cell);}
+ return g;}
+function svSummary(node){const lines=[],acts=node.a,cls=Object.entries(node.c);
+ const main=acts.map((a,k)=>[a,node.f[k],k]).sort((x,y)=>y[1]-x[1]);
+ lines.push(`${svWho(node.p)} ${main.filter(x=>x[1]>=3).map(x=>svActName(x[0],node.pot).toLowerCase()+' '+x[1]+'%').join(', ')}.`);
+ for(const [a,f,k] of main.slice(0,3)){if(f<5)continue;const top=cls.filter(([,s])=>s[k]>=70).map(([h])=>h);if(top.length)lines.push(`${svActName(a,node.pot)}: ${top.slice(0,14).join(', ')}${top.length>14?' и др.':''}.`);}
+ const edge=(node.edge||[]).filter(h=>node.c[h]);if(edge.length)lines.push(`Пограничные (смешанная стратегия): ${edge.slice(0,16).map(h=>h+' '+node.c[h].map((p,k)=>p>=10?svActName(acts[k],node.pot).split(' ')[0].toLowerCase()+' '+p:'').filter(Boolean).join('/')).join('; ')}${edge.length>16?' и др.':''}. Здесь выбор зависит от соперника: против пассивного чаще ставь на вэлью, против агрессивного чаще чекай/коллируй.`);
+ return lines;}
+function svRender(){
+ const box=$('#solver-content');if(!box||!SOLVER_VIEW)return;box.replaceChildren();
+ const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;};
+ if(!SVS.index){if(!SVS.loading){SVS.loading=true;svJson('index.json').then(j=>{SVS.index=j;}).catch(()=>{SVS.err='Разборы ещё не опубликованы.';}).finally(()=>{SVS.loading=false;svRender();});}box.append(el('p','hint',SVS.err||'Загружаю разборы…'));return;}
+ box.append(el('p','hint','Раздачи посчитаны в солвере (TexasSolver) на диапазонах Литтла 2/5, 100 ББ, опен 15. Дерево: флоп 33/66%, тёрн 66%, ривер 50/100%, рейзы и олл-ин. Точность около 1% банка. Частоты — по реальному диапазону, который доходит до узла.'));
+ const list=el('div','controls svspots');for(const s of SVS.index.spots){const b=el('button','rngtab',s.title);b.type='button';b.setAttribute('aria-pressed',String(SVS.spot&&SVS.spot.id===s.id));b.onclick=()=>svOpen(s.id);list.append(b);}box.append(list);
+ if(SVS.err)box.append(el('p','hint',SVS.err));
+ if(!SVS.spot){box.append(el('p','hint','Выбери раздачу.'));return;}
+ if(SVS.loading||!SVS.flop){box.append(el('p','hint','Загружаю…'));return;}
+ const head=el('div','svhead');head.append(el('b','',SVS.spot.title+' · '));head.append(...svCards(SVS.flop.board));if(SVS.path.length){const card=SVS.path.find(x=>/^[2-9TJQKA][shdc]$/.test(x));if(card)head.append(...svCards(card));}box.append(head);
+ // line breadcrumbs
+ const crumbs=el('div','svcrumbs');const reset=el('button','linkbtn','Флоп');reset.type='button';reset.onclick=()=>{SVS.path=[];svRender();};crumbs.append(reset);
+ SVS.path.forEach((a,i)=>{const b=el('button','linkbtn',/^[2-9TJQKA][shdc]$/.test(a)?'тёрн '+a:(svNode(SVS.path.slice(0,i))?svActName(a,svNode(SVS.path.slice(0,i)).pot):a));b.type='button';b.onclick=()=>{SVS.path=SVS.path.slice(0,i+1);svRender();};crumbs.append(el('span','',' → '),b);});box.append(crumbs);
+ const node=svNode(SVS.path);
+ if(!node){const last=SVS.path[SVS.path.length-1]||'';const prev=svNode(SVS.path.slice(0,-1));
+  if(last[0]==='F'){box.append(el('p','hint','Фолд — раздача окончена.'));return;}
+  const turnsDone=SVS.path.some(x=>/^[2-9TJQKA][shdc]$/.test(x));
+  if(!turnsDone&&(last==='C'||last==='X')&&SVS.index&&SVS.spot.turns){box.append(el('p','','Выбери карту тёрна:'));const tc=el('div','svturns');for(const c of SVS.spot.turns){const b=el('button','rngtab',c);b.type='button';b.onclick=()=>svTurn(c);tc.append(b);}box.append(tc);return;}
+  box.append(el('p','hint',turnsDone?'Дальше ривер: в этой версии разбора ривер не выгружен.':'Конец линии.'));void prev;return;}
+ box.append(el('p','svinfo',`Ходит ${svWho(node.p)} · банк ${node.pot}${node.toCall?' · к коллу '+node.toCall:''} · комбинаций в диапазоне ${node.combos}`));
+ const acts=el('div','svacts');node.a.forEach((a,k)=>{const b=el('button','rngtab',svActName(a,node.pot)+' · '+node.f[k]+'%');b.type='button';b.style.borderColor=svColor(a,k,node.a);b.onclick=()=>{SVS.path.push(a);svRender();};acts.append(b);});box.append(acts);
+ const bar=el('div','svbar');node.a.forEach((a,k)=>{if(!node.f[k])return;const s=el('span','');s.style.width=node.f[k]+'%';s.style.background=svColor(a,k,node.a);s.title=svActName(a,node.pot)+' '+node.f[k]+'%';bar.append(s);});box.append(bar);
+ box.append(svGrid(node));
+ const lg=el('div','legend');node.a.forEach((a,k)=>{const s=el('span','');const i=el('i','');i.style.background=svColor(a,k,node.a);s.append(i,document.createTextNode(svActName(a,node.pot)));lg.append(s);});box.append(lg);
+ for(const l of svSummary(node))box.append(el('p','',l));
+}
+$('#rng-solver').onclick=()=>svSelect(true);
+// SOLVER-VIEW END
 $('#rng-standard').onclick=()=>personalSelect(false);
 $('#rng-personal').onclick=()=>personalSelect(true);
 // ---- Any range: любой процент лучших рук. Порядок — эквити руки против случайной руки (как в PokerStove) ----
@@ -2858,8 +2922,8 @@ function showApp(response){
   $('#auth').hidden=true; $('#app').hidden=false;
   if(AUTH){ S.player=AUTH.login; save(); }
   RUN=null;
-  // Little 100 vs ideal bots is the default preflop mode for Premium accounts.
-  if(personalOwner()){ LIT=true; setGame('pre'); setMode('ind'); ptRefreshUi(); }
+  // J. Little (range trainer vs ideal bots) is the default preflop mode for every account.
+  if(AUTH&&AUTH.token){ LIT=true; setGame('pre'); setMode('ind'); ptRefreshUi(); }
   idle(); updScore(); activateAccountSettings(response);
 }
 function authUpd(){ const ok=$('#alogin').value.trim()&&$('#apass').value; $('#abtn-login').disabled=!ok; if(AMODE==='reg') $('#abtn-reg').disabled=!ok; else $('#abtn-reg').disabled=false; }
@@ -3130,20 +3194,27 @@ function setupTrainingFilters(){
  dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
 }
 // A separate one-decision preflop trainer. Legacy helpers and isolated personal state.
-function personalTraining(){return GAME==='pre'&&STYLE==='ind'&&personalOwner();}
+function personalTraining(){return GAME==='pre'&&STYLE==='ind'&&(typeof LIT!=='undefined'&&LIT?!!(AUTH&&AUTH.token):personalOwner());}
 function ptElement(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
 function ptGrid(q){const block=gridEl({d:{ch:q.ch,kind:q.kind},h:q.hand});block.querySelector('.legend').innerHTML='<span><i style="background:var(--raise)"></i>'+(q.kind==='open'?'рейз до 16':'3-бет')+'</span>'+((q.kind!=='open'||q.heroPos==='SB')?'<span><i style="background:var(--call)"></i>'+(q.kind==='open'?'лимп до 4':'колл')+'</span>':'')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>фолд</span>';return block;}
 function ptKey(){return 'melnik-personal-training:'+AUTH.login.trim().toLowerCase();}
-function ptPersist(){try{localStorage.setItem(ptKey(),JSON.stringify({rows:PT.rows.slice(-500),pending:PT.pending,options:PT_OPTIONS}));}catch(e){PT.status='Не удалось сохранить на устройстве';}}
+function ptPersist(){if(typeof LIT!=='undefined'&&LIT)return;try{localStorage.setItem(ptKey(),JSON.stringify({rows:PT.rows.slice(-500),pending:PT.pending,options:PT_OPTIONS}));}catch(e){PT.status='Не удалось сохранить на устройстве';}}
 function ptRefreshUi(){
- const b=$('#s-ind'),owner=personalOwner();b.innerHTML='Индивидуальный <span class="premium-tag">Premium</span>';b.classList.toggle('locked',!owner);b.setAttribute('aria-disabled',String(!owner));b.title=owner?'Против моделей друзей: 2/5, 100 ББ, 10 игроков':'Premium — пока недоступно';
- const l=$('#s-lit');if(l){l.innerHTML='Литтл 100 <span class="premium-tag">Premium</span>';l.classList.toggle('locked',!owner);l.setAttribute('aria-disabled',String(!owner));l.title=owner?'Чарты Литтла 2/5, 100 ББ, опен 15, 10 игроков: соперники играют по тем же чартам':'Premium — пока недоступно';}
+ const b=$('#s-ind'),owner=personalOwner();b.textContent='Personal';b.classList.toggle('locked',!owner);b.setAttribute('aria-disabled',String(!owner));b.title=owner?'Против моделей друзей: 2/5, 100 ББ, 10 игроков':'Недоступно для этого аккаунта';
+ const l=$('#s-lit');if(l){l.textContent='J. Little';l.classList.remove('locked');l.setAttribute('aria-disabled','false');l.title='Тренажёр диапазонов Джонатана Литтла: 2/5, 100 ББ, опен 15';}
+ const lit=typeof LIT!=='undefined'&&LIT,show=(el,v)=>{if(el){el.hidden=!v;el.style.display=v?'':'none';}},rnd=$('#pt-random'),seats=$('#pt-seats');show(rnd&&rnd.closest('label'),!lit);show(seats&&seats.closest('label'),lit);show($('#pt-personal-note'),!lit);const hint=$('#pt-mode-hint');if(hint)hint.textContent=lit?'J. Little: блайнды 2/5 · 100 ББ · опен 15. 8 игроков — чарты Литтла и его пограничные расширения, 10 игроков — наши собранные диапазоны. Соперники играют по тем же диапазонам, пограничные руки иногда разыгрывают по-разному.':'Personal: 10 игроков · блайнды 2/5 · 100 ББ · твой опен 15. Соперники — модели друзей. Раздачи подбираются у границ диапазонов.';
  const on=personalTraining(),fields=$('#personal-training-filters');if(fields)fields.hidden=!on;
- $('#gto-model-controls').hidden=on||!['prof','pre'].includes(GAME);$('#players').closest('label').hidden=on;
- if(!owner){PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};}
+ $('#gto-model-controls').hidden=on||!['prof','pre'].includes(GAME);{const pl=$('#players').closest('label');pl.hidden=on;pl.style.display=on?'none':'';}
+ if(!owner&&!(typeof LIT!=='undefined'&&LIT)){PT={question:null,rows:[],pending:[],loaded:false,loading:false,saving:false,status:'',owner:null};}
 }
 async function ptLoad(){
- if(!personalTraining()||PT.loading)return;const token=AUTH.token;PT.loading=true;PT.loadAttempted=true;
+ if(!personalTraining()||PT.loading)return;const token=AUTH.token;
+ // J. Little works for every account from the public charts; Personal always reloads the private server data.
+ if(typeof LIT!=='undefined'&&LIT){PT.loadAttempted=true;if(!PERSONAL_DATA||!PERSONAL_DATA.public){PT.loading=true;let src=PERSONAL_DATA;try{if(!src){const r=await api('personalRanges',{token});if(!r||!r.ok||!r.data)throw Error(r&&r.error||'ranges');src=r.data;}}catch(e){PT.loading=false;PT.loadAttempted=true;PT.loaded=false;if(!personalOwner()){LIT=false;setMode('gto');ptRefreshUi();idle();return;}PT.status='J. Little: диапазоны не загрузились. Нажми «Повторить загрузку».';ptIdle();return;}finally{PT.loading=false;}
+  if(AUTH.token!==token||!personalTraining())return;const {players,archives,...ranges}=src;PERSONAL_DATA={...ranges,public:true,ownerIndex:0,players:[{name:AUTH.login,model:'base'}]};if(typeof petPlayable==='function')petPlayable.s=null;}
+  PT.owner=null;PT.rows=[];PT.pending=[];PT.loaded=true;PT.status='';ptFilterValues();ptIdle();return;}
+ if(PERSONAL_DATA&&PERSONAL_DATA.public){PERSONAL_DATA=null;if(typeof petPlayable==='function')petPlayable.s=null;PT.loaded=false;}
+ PT.loading=true;PT.loadAttempted=true;
  try{
   if(!PERSONAL_DATA){const r=await api('personalRanges',{token});if(!r||!r.ok||!r.data)throw Error('ranges');if(!personalTraining()||AUTH.token!==token)return;PERSONAL_DATA=r.data;}
   const owner=AUTH.login.trim().toLowerCase();if(PT.owner!==owner){PT.owner=owner;try{const local=JSON.parse(localStorage.getItem(ptKey())||'{}');PT.rows=Array.isArray(local.rows)?local.rows:[];PT.pending=Array.isArray(local.pending)?local.pending:[];if(local.options)PT_OPTIONS=Object.assign(PT_OPTIONS,local.options);}catch(e){}}
@@ -3155,17 +3226,18 @@ async function ptLoad(){
  finally{PT.loading=false;}
  if(personalTraining()){if(!PT.question)ptIdle();else ptStats();}
 }
-function ptFilterValues(){const r=$('#pt-random'),h=$('#pt-hints'),s=$('#pt-strategy');if(r)r.checked=PT_OPTIONS.random;if(h)h.checked=PT_OPTIONS.hints;if(s)s.value=PT_OPTIONS.strategy;}
+function ptFilterValues(){const r=$('#pt-random'),h=$('#pt-hints'),s=$('#pt-strategy'),n=$('#pt-seats');if(n)n.value=String(PT_OPTIONS.seats||8);if(r)r.checked=PT_OPTIONS.random;if(h)h.checked=PT_OPTIONS.hints;if(s)s.value=PT_OPTIONS.strategy;}
 function ptSetupFilters(){
  const fields=ptElement('div','personal-training-filters');fields.id='personal-training-filters';fields.hidden=true;
- fields.append(ptElement('p','hint','Персональная игра: 10 игроков · блайнды 2/5 · 100 ББ · твой опен 15. Раздачи подбираются у границ диапазонов.'));
+ const modeHint=ptElement('p','hint','');modeHint.id='pt-mode-hint';fields.append(modeHint);
+ {const l=ptElement('label','sizesel');l.append(document.createTextNode('Игроков '));const s=document.createElement('select');s.id='pt-seats';for(const [v,t] of [[8,'8 — Литтл'],[10,'10 — наши']]){const o=document.createElement('option');o.value=v;o.textContent=t;s.append(o);}s.value=String(PT_OPTIONS.seats||8);s.onchange=()=>{PT_OPTIONS.seats=Number(s.value);ptPersist();if(personalTraining()){if(typeof petLeave==='function')petLeave();idle();}};l.append(s);fields.append(l);}
  for(const [id,label,key]of [['pt-random','Случайная рассадка в каждой задаче','random'],['pt-hints','Разрешить подсказку диапазона','hints']]){const l=ptElement('label','pt-check');const input=document.createElement('input');input.type='checkbox';input.id=id;input.checked=PT_OPTIONS[key];input.onchange=()=>{PT_OPTIONS[key]=input.checked;ptPersist();if(PT.question&&!PT.question.done)ptDraw();};l.append(input,document.createTextNode(label));fields.append(l);}
- PT_OPTIONS.strategy='base';fields.append(ptElement('p','hint','Позиции выбираются общим фильтром. Одна стратегия — по чартам Литтла 2/5, адаптированным под 10 игроков. Торговля продолжается до флопа, фолда или олл-ина.'));
+ PT_OPTIONS.strategy='base';{const n=ptElement('p','hint','Позиции выбираются общим фильтром. Одна стратегия — по чартам Литтла 2/5, адаптированным под 10 игроков. Торговля продолжается до флопа, фолда или олл-ина.');n.id='pt-personal-note';fields.append(n);}
  $('#training-filter-fields').append(fields);ptRefreshUi();
 }
 function ptIdle(){
  if(!personalTraining())return;clearTimeout(ANIM);ANIM=null;H=null;IDLE=true;PT.question=null;ptRefreshUi();$('#stats').hidden=false;
- $('#table').replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt');felt.append(ptElement('p','potline','Персональный префлоп · 2/5 · 100 ББ'));rail.append(felt);$('#table').append(rail);
+ $('#table').replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt');felt.append(ptElement('p','potline',typeof LIT!=='undefined'&&LIT?'J. Little · 2/5 · 100 ББ · '+(PT_OPTIONS.seats===10?10:8)+' игроков':'Personal · 2/5 · 100 ББ'));rail.append(felt);$('#table').append(rail);
  const b=ptElement('button','startbtn','Начать раздачу');b.id='start';b.type='button';b.disabled=PT.loading||!PT.loaded||!PERSONAL_DATA;b.onclick=ptNext;$('#table').append(b);
  idlePanel();$('#log').textContent='10 игроков · 2/5 · 100 ББ · опен 15. '+PT.status;
  ptStats();if(!PT.loaded&&!PT.loading&&!PT.loadAttempted)ptLoad();else if(!PT.loaded&&!PT.loading){const retry=ptElement('button','linkbtn','Повторить загрузку');retry.type='button';retry.onclick=ptLoad;$('#panel').append(retry);}
@@ -3224,8 +3296,8 @@ function ptReason(q){
 }
 function ptHint(){const q=PT.question;if(!q)return;if(!q.done){q.assisted=true;ptPersist();}const overlay=ptElement('div','sheet');overlay.id='sheet';const card=ptElement('div','sheetcard');card.setAttribute('role','dialog');card.setAttribute('aria-modal','true');const head=ptElement('div','sheethead');head.append(ptElement('h3','',typeof petTitle==='function'?petTitle(q):q.heroPos+(q.openerPos?' против '+q.openerPos:' · Open')));const close=ptElement('button','xbtn','✕');close.type='button';close.setAttribute('aria-label','Закрыть диапазон');close.onclick=()=>overlay.remove();head.append(close);card.append(head,ptGrid(q));overlay.append(card);overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};document.body.append(overlay);close.focus();}
 function ptAnswer(action){const q=PT.question;if(!q||q.done||q.animating||!['F','C','R'].includes(action)||!personalTraining())return;if(action==='F')sndFold();else sndChips();q.done=true;q.action=action;q.correct=action===q.expected;const d={id:q.id,t:q.t,rv:q.rv,kind:q.kind,heroPos:q.heroPos,openerPos:q.openerPos,openerName:q.openerName,hand:q.hand,action,expected:q.expected,correct:q.correct,assisted:q.assisted,rangeMode:q.rangeMode,seating:q.players.map(p=>p.name),randomSeating:q.randomSeating};PT.rows.push(d);PT.rows=PT.rows.slice(-500);PT.pending.push(d);PT.status='Сохраняем…';ptPersist();ptDraw();ptFlush();}
-async function ptFlush(){if(PT.saving||!PT.pending.length||!personalOwner())return;PT.saving=true;const token=AUTH.token,owner=PT.owner,batch=PT.pending.slice(0,50);try{const r=await api('personalSave',{token,decisions:batch});if(PT.owner!==owner||!personalOwner()||AUTH.token!==token)return;if(!r||!r.ok||!Array.isArray(r.accepted))throw Error('save');const ids=new Set(r.accepted);PT.pending=PT.pending.filter(d=>!ids.has(d.id));PT.status='Синхронизировано';ptPersist();}catch(e){PT.status='Сохранено на устройстве · повторить синхронизацию';}finally{PT.saving=false;}if(personalTraining())ptStats();if(PT.pending.length&&PT.status==='Синхронизировано')ptFlush();}
-function ptStats(){if(!personalTraining())return;const rows=PT.rows.filter(d=>d.rv===PERSONAL_DATA?.version),solo=rows.filter(d=>!d.assisted),aided=rows.filter(d=>d.assisted);const pct=a=>a.length?Math.round(a.filter(d=>d.correct).length/a.length*100)+'%':'—';$('#sessline').textContent='Персональные · без подсказок '+solo.length+' · '+pct(solo);$('#stats').hidden=false;const box=$('#statsbody');box.replaceChildren(ptElement('p','',`Последние ${rows.length} ответов текущей версии: без подсказки ${solo.length}, верно ${pct(solo)}; с подсказкой ${aided.length}, верно ${pct(aided)}.`));const errors={};for(const d of solo.filter(d=>!d.correct)){const k=d.heroPos+' · '+(d.kind==='open'?'Open':'против '+d.openerPos);errors[k]=(errors[k]||0)+1;}for(const [k,n]of Object.entries(errors).sort((a,b)=>b[1]-a[1]).slice(0,5))box.append(ptElement('p','hint',k+': ошибок '+n));const sync=ptElement('button','helpbtn',PT.status||'Синхронизировать');sync.type='button';sync.onclick=ptFlush;box.append(sync,ptElement('p','hint','В GTO-профиль эти ответы не входят. Частоты задач не оценивают частоты реальной игры.'));}
+async function ptFlush(){if(typeof LIT!=='undefined'&&LIT){PT.pending=[];return;}if(PT.saving||!PT.pending.length||!personalOwner())return;PT.saving=true;const token=AUTH.token,owner=PT.owner,batch=PT.pending.slice(0,50);try{const r=await api('personalSave',{token,decisions:batch});if(PT.owner!==owner||!personalOwner()||AUTH.token!==token)return;if(!r||!r.ok||!Array.isArray(r.accepted))throw Error('save');const ids=new Set(r.accepted);PT.pending=PT.pending.filter(d=>!ids.has(d.id));PT.status='Синхронизировано';ptPersist();}catch(e){PT.status='Сохранено на устройстве · повторить синхронизацию';}finally{PT.saving=false;}if(personalTraining())ptStats();if(PT.pending.length&&PT.status==='Синхронизировано')ptFlush();}
+function ptStats(){if(!personalTraining())return;const rows=PT.rows.filter(d=>d.rv===PERSONAL_DATA?.version),solo=rows.filter(d=>!d.assisted),aided=rows.filter(d=>d.assisted);const pct=a=>a.length?Math.round(a.filter(d=>d.correct).length/a.length*100)+'%':'—';$('#sessline').textContent=(typeof LIT!=='undefined'&&LIT?'J. Little':'Personal')+' · без подсказок '+solo.length+' · '+pct(solo);$('#stats').hidden=false;const box=$('#statsbody');box.replaceChildren(ptElement('p','',`Последние ${rows.length} ответов текущей версии: без подсказки ${solo.length}, верно ${pct(solo)}; с подсказкой ${aided.length}, верно ${pct(aided)}.`));const errors={};for(const d of solo.filter(d=>!d.correct)){const k=d.heroPos+' · '+(d.kind==='open'?'Open':'против '+d.openerPos);errors[k]=(errors[k]||0)+1;}for(const [k,n]of Object.entries(errors).sort((a,b)=>b[1]-a[1]).slice(0,5))box.append(ptElement('p','hint',k+': ошибок '+n));const sync=ptElement('button','helpbtn',PT.status||'Синхронизировать');sync.type='button';sync.onclick=ptFlush;box.append(sync,ptElement('p','hint','В GTO-профиль эти ответы не входят. Частоты задач не оценивают частоты реальной игры.'));}
 function ptKeyboard(e){if($('#training-filters').open||$('#settings-dialog').open||['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;const sheet=document.getElementById('sheet');if(sheet){if(e.key==='Escape'||e.key==='Enter'){e.preventDefault();sheet.remove();}return;}if(e.key==='Enter'||e.key===' '){e.preventDefault();if(!PT.question||PT.question.done)ptNext();return;}const a={f:'F','а':'F',c:'C','с':'C',r:'R','к':'R'}[e.key.toLowerCase()];if(a&&PT.question&&!PT.question.done){if(a==='C'&&PT.question.kind==='open'&&PT.question.heroPos!=='SB')return;e.preventDefault();ptAnswer(a);}}
 
 // Shared deterministic personal preflop policy, used by browser and server.
@@ -3272,8 +3344,11 @@ function pcAllowed(policy,hand,toCall){let acts=policy.R.includes(hand)?['R']:po
 function petContext(h,p){const model=h.raisers.length?h.prof[h.raisers[0]].model:null,c={p,level:h.level,curBet:h.curBet,bet:h.players[p].bet,pot:potOf(h),lastRaise:h.lastRaise,callers:h.callers,raisers:h.raisers.slice(),rangeMode:'base'};if(p===h.hero&&h.level===1&&PET_WIDE_OPENERS.includes(model))c.openerWide=true;return c;}
 function petChart(s){return chart({R:s.R.join(','),C:s.C.join(','),RC:(s.RC||[]).join(','),RF:s.RF.join(','),CF:s.CF.join(',')});}
 function petDecision(h,p){const c=petContext(h,p),policy=pcPolicy(PERSONAL_DATA,c);return {p,hand:h.players[p].h,pot:c.pot,kind:policy.kind,ch:petChart(policy),toCall:Math.max(0,h.curBet-h.players[p].bet),level:h.level,ip:policy.ip,op:h.raisers[0],canRaise:h.curBet<500&&!h.players[p].allin,curBet:h.curBet,callers:h.callers,minTo:Math.min(500,h.curBet+h.lastRaise),maxTo:500,personalSize:policy.raiseTo,policy,context:c};}
-// Little 100 mode: every opponent is the base Little model (no profiles, no limps), only the hero keeps the name.
-function petIdealRoster(){const index=PERSONAL_DATA.ownerIndex||0,me={...PERSONAL_DATA.players[index]};return [me,...Array.from({length:9},(_,i)=>({name:'Бот',model:'base',note:'',ideal:true}))];}
+// J. Little mode: 8 seats = Little's own charts (10-max UTG+2…BTN are his UTG…BTN) plus his border cells; 10 seats = our 10-max charts.
+function petSeats(){return typeof LIT!=='undefined'&&LIT&&PT_OPTIONS.seats!==10?8:10;}
+function petPos(i){return petSeats()===8?['—','—','UTG','UTG+1','LJ','HJ','CO','BTN','SB','BB'][i]:PT_POS[i];}
+// J. Little mode: every opponent is the base Little model (no profiles, no limps), only the hero keeps the name.
+function petIdealRoster(){const index=PERSONAL_DATA.ownerIndex||0,me={...(PERSONAL_DATA.players||[])[index]||{name:AUTH&&AUTH.login||'Ты',model:'base'}};return [me,...Array.from({length:9},(_,i)=>({name:'Бот',model:'base',note:'',ideal:true}))];}
 function petRoster(){if(typeof LIT!=='undefined'&&LIT)return petIdealRoster();const index=PERSONAL_DATA.ownerIndex||0,a=PERSONAL_DATA.players.slice(index).concat(PERSONAL_DATA.players.slice(0,index)).map(p=>({...p}));if(PT_OPTIONS.random)for(let i=a.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[a[i],a[j]]=[a[j],a[i]];}return a;}
 function petKey(s){let h=5381;for(const c of String(s||''))h=(h*33+c.codePointAt(0))>>>0;return 'p'+h.toString(36);}
 function petCanLimp(h,p){return ['pz5eycg','pz5abud','p4s01b4'].includes(petKey(h.prof[p].name));}
@@ -3360,16 +3435,16 @@ function petTrainingDeal(h,p,policy){const {border,clear}=petCells(policy),list=
 // After the hero raises, sometimes a player behind gets a hand from his own re-raise range: more answers to 3-bets and 4-bets.
 function petBiasAfterHero(h){if(h.over||h.raisers[h.raisers.length-1]!==h.hero||h.level>2||Math.random()>.35)return;const cand=h.toAct.filter(q=>q!==h.hero&&!(h.lines&&h.lines[q]));if(!cand.length)return;const q=cand[rnd(cand.length)],b=petModel(h,q);if(b.raises.size)petGive(h,q,b.raises);}
 function petNew(){
- if(!personalTraining())return;if(!PERSONAL_DATA||!PT.loaded)return ptLoad();if(PT.savedN==null)PT.savedN=N;N=10;STACK=500;BB=5;clearTimeout(ANIM);ANIM=null;
+ if(!personalTraining())return;if(!PERSONAL_DATA||!PT.loaded||!!PERSONAL_DATA.public!==!!(typeof LIT!=='undefined'&&LIT))return ptLoad();if(PT.savedN==null)PT.savedN=N;N=10;STACK=500;BB=5;clearTimeout(ANIM);ANIM=null;
  let h;for(let attempt=0;attempt<100;attempt++){
-  const deck=shuffled(),players=[];for(let p=0;p<10;p++){const cards=[deck.pop(),deck.pop()];players.push({i:p,cards,h:hclass(cards),bet:p===8?2:p===9?5:0,folded:false,allin:false,tag:''});}
-  const choices=PT_POS.map((_,i)=>i).filter(i=>filter==='all'||filter==='EP'&&i<=3||filter==='MP'&&i>=4&&i<=5||filter==='LP'&&i>=6&&i<=7||filter==='BL'&&i>=8),hero=choices[rnd(choices.length)],roster=petRoster();
-  h={players,deck,hero,prof:Array.from({length:10},(_,p)=>roster[(p-hero+10)%10]),curBet:5,lastRaise:5,level:0,raisers:[],callers:0,toAct:[0,1,2,3,4,5,6,7,8,9],log:[],decisions:[],over:false,outcome:'',board:[],street:0,runout:deck.slice(-5),personalFlow:true,personalStrategy:PT_OPTIONS.strategy||'base',personalId:'pfp-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9),personalIndex:0};
+  const deck=shuffled(),players=[],off=10-petSeats();for(let p=0;p<10;p++){const cards=[deck.pop(),deck.pop()];players.push({i:p,cards,h:hclass(cards),bet:p===8?2:p===9?5:0,folded:p<off,absent:p<off,allin:false,tag:''});}
+  const choices=PT_POS.map((_,i)=>i).filter(i=>i>=off).filter(i=>filter==='all'||filter==='EP'&&i<=3||filter==='MP'&&i>=4&&i<=5||filter==='LP'&&i>=6&&i<=7||filter==='BL'&&i>=8),hero=choices[rnd(choices.length)],roster=petRoster();
+  h={players,deck,hero,prof:Array.from({length:10},(_,p)=>roster[(p-hero+10)%10]),curBet:5,lastRaise:5,level:0,raisers:[],callers:0,toAct:[0,1,2,3,4,5,6,7,8,9].filter(i=>i>=off),seatOff:off,seatN:10-off,log:[],decisions:[],over:false,outcome:'',board:[],street:0,runout:deck.slice(-5),personalFlow:true,personalStrategy:PT_OPTIONS.strategy||'base',personalId:'pfp-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9),personalIndex:0};
   H=h;FRAMES=[];snap(h);petRun(h);if(h.over)continue;if(petTrainingDeal(h,h.hero,petDecision(h,hero).policy))break;
  }
  H=h;IDLE=false;if(h.over){petRender();return;}petQuestion(h);play();
 }
-function petQuestion(h){const d=petDecision(h,h.hero),p=h.players[h.hero],last=h.raisers.length?h.raisers[h.raisers.length-1]:h.log.filter(e=>e.a==='C').slice(-1)[0]?.p;PT.question={id:h.personalId+'-'+h.personalIndex,handId:h.personalId,t:Date.now(),rv:PERSONAL_DATA.version,kind:d.kind,heroPos:PT_POS[h.hero],openerPos:h.raisers.length?PT_POS[h.raisers[0]]:null,hand:p.h,cards:p.cards.slice(),ch:d.ch,d,context:d.context,policy:d.policy,allowed:pcAllowed(d.policy,p.h,d.toCall),expected:cls(d.ch,p.h),rangeMode:d.context.rangeMode,selectedStrategy:h.personalStrategy,villain:last==null?null:h.prof[last],behind:h.toAct.filter(i=>i!==h.hero&&!h.players[i].folded&&!h.players[i].allin).map(i=>({name:h.prof[i].name,pos:PT_POS[i]})),players:h.prof,assisted:false,done:false,randomSeating:PT_OPTIONS.random};}
+function petQuestion(h){const d=petDecision(h,h.hero),p=h.players[h.hero],last=h.raisers.length?h.raisers[h.raisers.length-1]:h.log.filter(e=>e.a==='C').slice(-1)[0]?.p;PT.question={id:h.personalId+'-'+h.personalIndex,handId:h.personalId,t:Date.now(),rv:PERSONAL_DATA.version,kind:d.kind,heroPos:petPos(h.hero),heroKey:PT_POS[h.hero],openerPos:h.raisers.length?petPos(h.raisers[0]):null,hand:p.h,cards:p.cards.slice(),ch:d.ch,d,context:d.context,policy:d.policy,allowed:pcAllowed(d.policy,p.h,d.toCall),expected:cls(d.ch,p.h),rangeMode:d.context.rangeMode,selectedStrategy:h.personalStrategy,villain:last==null?null:h.prof[last],behind:h.toAct.filter(i=>i!==h.hero&&!h.players[i].folded&&!h.players[i].allin).map(i=>({name:h.prof[i].name,pos:petPos(i)})),players:h.prof,assisted:false,done:false,randomSeating:PT_OPTIONS.random};}
 function petLeave(){clearTimeout(ANIM);ANIM=null;if(PT.savedN!=null){N=PT.savedN;PT.savedN=null;}STACK=400;BB=4;if(H&&H.personalFlow)H=null;PT.question=null;}
 function petAct(action,amt){const h=H;if(!personalTraining()||!h||!h.personalFlow||h.over||ANIM||h.toAct[0]!==h.hero)return;const q=PT.question,d=petDecision(h,h.hero);if(!q)return;if(action==='C'&&d.toCall<=0||action==='X'&&d.toCall>0)return;if(action==='R'){amt=Number(amt)||d.personalSize;if(!d.canRaise||amt<d.minTo||amt>500)return;}const correct=q.allowed.includes(action)&&(action!=='R'||amt===d.personalSize);q.done=true;q.action=action;q.amount=action==='R'?amt:0;q.correct=correct;
  const history=h.log.map(e=>({p:e.p,a:e.a,amt:e.amt})),row={id:q.id,handId:h.personalId,t:q.t,rv:q.rv,kind:q.kind,heroPos:q.heroPos,openerPos:q.openerPos,hand:q.hand,action,amount:q.amount,expected:q.allowed,correct,assisted:q.assisted,rangeMode:q.rangeMode,seating:Array.from({length:10},(_,k)=>h.prof[(h.hero+k)%10].name),randomSeating:q.randomSeating,fullContext:q.context,history};
@@ -3380,15 +3455,35 @@ function petGrid(q){const b=gridEl({d:q.d||{ch:q.ch,kind:q.kind},h:q.hand}),ch=(
  b.querySelector('.legend').innerHTML=item('var(--raise)',raise)+(has('C')?item('var(--call)',call):'')+(has('RC')?item(diag('raise','call'),raise.toLowerCase()+' / '+call+' по условиям'):'')+(has('RF')?item(diag('raise','fold'),raise.toLowerCase()+' / фолд по условиям'):'')+(has('CF')?item(diag('call','fold'),call+' / фолд по условиям'):'')+'<span><i style="background:var(--fold);border:1px solid var(--line)"></i>'+(q.d&&q.d.toCall===0?'чек':'фолд')+'</span>';return b;}
 // Human-readable names: the header shows the actual answer, the situation is a separate line.
 // Chart title = the actual spot: who did what before the hero.
-function petTitle(q){const c=q.context||{},rs=c.raisers||[],names=q.players||[],who=p=>(names[p]?names[p].name+' ':'')+'('+PT_POS[p]+')',last=rs[rs.length-1],me=q.heroPos;
+function petTitle(q){const c=q.context||{},rs=c.raisers||[],names=q.players||[],who=p=>(names[p]?names[p].name+' ':'')+'('+petPos(p)+')',last=rs[rs.length-1],me=q.heroPos;
  if(c.level===0)return me+(c.callers?' · перед тобой '+c.callers+' '+(c.callers===1?'лимпер':c.callers<5?'лимпера':'лимперов'):c.p===9?' · все сбросили до BB':' · первым в банк');
  if(c.level===1)return me+' · опен '+who(rs[0])+' до '+c.curBet+(c.callers?' и '+c.callers+' колл'+(c.callers===1?'':'а'):'');
  const step=['','рейз','3-бет','4-бет','5-бет'][Math.min(4,c.level)];return me+' · '+(rs.includes(c.p)?'ответ на ':'')+step+' '+who(last)+' до '+c.curBet;}
 function petActName(a,amt,kind,level,callers){return a==='R'?(kind==='iso'||kind==='bbiso'?'Рейз-изоляция':cap(RAISE_NAME[kind]||'рейз'))+' до '+amt:a==='C'?(level===0?(callers?'Оверлимп':'Лимп'):'Колл'+(amt?' '+amt:'')):a==='X'?'Чек':'Фолд';}
-function petSituation(q){const c=q.context,hist=(q.history||[]).filter(e=>e.a!=='F'),names=q.players||[],who=p=>p===c.p?'ты':(names[p]?names[p].name+' ('+PT_POS[p]+')':PT_POS[p]);let level=0;const parts=hist.map(e=>{if(e.a==='R'){level++;return who(e.p)+' — '+(['рейз','3-бет','4-бет','5-бет'][Math.min(3,level-1)])+' до '+e.amt;}return who(e.p)+' — '+(e.a==='X'?'чек':level===0?'лимп':'колл');});
+function petSituation(q){const c=q.context,hist=(q.history||[]).filter(e=>e.a!=='F'),names=q.players||[],who=p=>p===c.p?'ты':(names[p]?names[p].name+' ('+petPos(p)+')':petPos(p));let level=0;const parts=hist.map(e=>{if(e.a==='R'){level++;return who(e.p)+' — '+(['рейз','3-бет','4-бет','5-бет'][Math.min(3,level-1)])+' до '+e.amt;}return who(e.p)+' — '+(e.a==='X'?'чек':level===0?'лимп':'колл');});
  if(!parts.length)return c.p===9?'Все сбросили до тебя на BB':'Все до тебя сбросили';const limps=c.level===0?hist.length:0;return (limps?(limps===1?'Перед тобой один лимпер: ':'Перед тобой '+limps+' лимпера'+(limps>4?'х':'')+': '):'')+parts.join(' · ');}
 function petDominators(hand){const ranks='AKQJT98765432',candidates={A:['AK','AQ','AJ','AT'],K:['AK','KQ','KJ','KT'],Q:['AQ','KQ','QJ','QT'],J:['AJ','KJ','QJ','JT']}[hand[0]]||[];return candidates.filter(h=>{const other=h[0]===hand[0]?h[1]:h[1]===hand[0]?h[0]:null;return other&&ranks.indexOf(other)<ranks.indexOf(hand[1]);}).join('/');}
+// J. Little: a plain range trainer. Equity of the hand against the range it faces, the price, and how to play border cells.
+function petLittleRange(q){const D=PERSONAL_DATA,c=q.context||{},rs=c.raisers||[],key=i=>PT_POS[i],hero=c.p;
+ const open=i=>i===8?D.sb.R:[D.open[key(i)],(D.openBorder||{})[key(i)]].filter(Boolean).join(','),vs=(a,b)=>D.vs[key(a)+'>'+key(b)]||{};
+ if(c.level===0){if(c.callers||hero===9)return null;const v=vs(hero,9);return {text:[v.R,v.C,v.CF,v.RC].filter(Boolean).join(','),label:'диапазона защиты BB'};}
+ if(c.level===1)return {text:open(rs[0]),label:'опена '+petPos(rs[0])};
+ if(c.level===2){const v=vs(rs[0],rs[1]);return v.R?{text:v.R,label:'3-бета '+petPos(rs[1])}:null;}
+ return {text:'QQ+,AKs,AKo',label:'4-бета (QQ+, AK)'};}
+function petLittleExplain(q){
+ const d=q.d,c=q.context,hand=q.hand,call=d.toCall,pot=d.pot,price=call?Math.round(call/(pot+call)*100):0,pol=d.policy||{},has=k=>(pol[k]||[]).includes(hand),best=q.allowed[0];
+ const lines=[`${hand} · ${q.heroPos}. Банк ${pot}`+(call?`, доплата ${call}: для колла нужно ${price}% эквити.`:'.')];
+ if(q.littleEq===undefined){const r=petLittleRange(q);q.littleEq=null;if(r&&q.cards){const w={};for(const x of pcHands(r.text))w[x]=1;const e=eqQuick(q.cards,w);if(e!=null)q.littleEq={e:Math.round(e*100),label:r.label};}}
+ const E=q.littleEq;if(E)lines.push(`Эквити против ${E.label}: ${E.e}%.`);
+ if(best==='F'){if(call&&E)lines.push(E.e<price?'Эквити меньше цены колла — продолжать невыгодно.':'Эквити формально хватает, но без инициативы и с доминацией рука плохо его реализует, а за спиной остаются игроки. По чарту это фолд.');else lines.push(d.kind==='open'?'Против игроков за спиной рука слишком слаба: открытие в среднем невыгодно.':'Продолжение в среднем невыгодно.');}
+ else if(best==='C'||best==='X')lines.push(call?'Эквити хватает для колла, но повышать нечем: лучшие руки соперника продолжат, худшие выкинут.':'Чек: нет причины раздувать банк.');
+ else if(best==='R')lines.push(d.kind==='open'?'Рука опережает диапазоны тех, кто продолжит, — открытие выгодно.':['A5s','A4s','A3s','A2s'].includes(hand)&&c.level>=1?'Повышение с блокером туза и игровым потенциалом: часть рук соперника выкинет, остальным ты не безнадёжно уступаешь.':'Рука опережает диапазон соперника — повышение выгодно.');
+ if(has('RF'))lines.push(d.kind==='open'?'Пограничная рука: открывай против пассивных и тайтовых игроков за спиной, выкидывай, если за тобой агрессивные игроки, которые часто 3-бетят.':'Пограничная рука: 3-бет против широкого или пассивного рейзера, фолд против тайтового или того, кто часто 4-бетит.');
+ if(has('CF'))lines.push('Пограничная рука: против агрессивного или широкого рейзера можно коллировать шире, против тайтового — фолд. В позиции колл лучше, без позиции — осторожнее.');
+ if(has('RC'))lines.push('Пограничная рука: против широкого или агрессивного рейзера — 3-бет, против тайтового — колл.');
+ return lines;}
 function petExplain(q){
+ if(typeof LIT!=='undefined'&&LIT)return petLittleExplain(q);
  const d=q.d,c=q.context,hand=q.hand,call=d.toCall,pot=d.pot,price=call?Math.round(call/(pot+call)*100):0,remaining=500-c.bet,ratio=call?Math.round((500-c.curBet)/call):0,behind=q.behind?q.behind.length:Math.max(0,9-c.p),pos=q.heroPos;
  const expected=q.allowed.map(a=>petActName(a,a==='R'?d.personalSize:call,d.kind,c.level,c.callers).toLowerCase()).join(' / ');
  const lines=[`${hand}, ${pos}. Банк ${pot}; доплата ${call}. ${call?'Цена колла '+price+'%. ':''}База: ${expected}.`];
