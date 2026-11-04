@@ -455,8 +455,11 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 /* Profile mode selector */
 .pt-prior{margin-top:12px}.pt-prior summary{cursor:pointer;padding:10px;border:1px solid var(--line);border-radius:10px}
 
-/* Solver view */
-.solver-content p{line-height:1.5}.svspots,.svacts,.svturns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.svspots .rngtab,.svacts .rngtab,.svturns .rngtab{width:auto;min-height:36px}.svhead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}.svcard{transform:scale(.8)}.svcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:13px}.svinfo{font-size:13px;color:var(--muted)}.svbar{display:flex;height:10px;border-radius:6px;overflow:hidden;margin:8px 0}.svbar span{display:block;height:100%}.svgrid .cell.svout{opacity:.35}
+
+
+
+/* Solver hands */
+body.shmode .playcontrols,body.shmode #filters,body.shmode #stats,body.shmode #sessline,body.shmode #training-filters-button{display:none!important}body.shmode .dec p{margin:4px 0;line-height:1.5;font-size:14px}body.shmode .dech{font-size:15px}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -495,14 +498,14 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
   <div class="seg" id="modes">
     <button id="m-prof" aria-pressed="true">GTO тест</button>
     <button id="m-pre" aria-pressed="false" title="Бесконечная тренировка">Префлоп <span class="inf" aria-hidden="true">∞</span></button>
-    <button id="m-hand" aria-pressed="false" title="Бета: расчёты после флопа примерные">Полная раздача <span class="soon beta">beta</span></button>
+    <button id="m-hand" aria-pressed="false" title="Решённые солвером раздачи с разбором">Полная раздача</button>
     <button id="m-size" disabled title="Скоро">Сайзинг <span class="soon">скоро</span></button>
   </div>
   <button id="m-rng" class="rngtab" type="button" aria-pressed="false">Диапазоны</button>
   </div>
 
   <section class="ranges" id="ranges" hidden>
-<div class="controls personal-tabs"><button id="rng-standard" class="rngtab" type="button" aria-pressed="true">Общие</button><button id="rng-personal" class="rngtab" type="button" aria-pressed="false" aria-disabled="true">Персональные</button><button id="rng-solver" class="rngtab" type="button" aria-pressed="false">Солвер</button></div><div id="personal-content" hidden></div><div id="solver-content" class="solver-content" hidden></div><div id="standard-ranges">
+<div class="controls personal-tabs"><button id="rng-standard" class="rngtab" type="button" aria-pressed="true">Общие</button><button id="rng-personal" class="rngtab" type="button" aria-pressed="false" aria-disabled="true">Персональные</button></div><div id="personal-content" hidden></div><div id="standard-ranges">
     <div class="controls rngctl">
       <button type="button" class="rngtab anybtn" id="rng-any" aria-pressed="false">Any range</button>
       <label class="sizesel" for="rng-stack">Стек <select id="rng-stack"><option value="100" selected>100 ББ</option><option value="125" disabled>125 ББ — скоро</option><option value="150" disabled>150 ББ — скоро</option></select></label>
@@ -2656,7 +2659,7 @@ const HELP_HTML=`
 <ul>
 <li><b>GTO тест</b> — короткий тест из 50 раздач без подсказок. В конце ты узнаешь свой стиль игры, насколько он близок к GTO и что стоит подтянуть.</li>
 <li><b>Префлоп</b> — тренировка первого решения в раздаче: играть руку или сбросить, и как именно. После каждого хода сразу разбор.</li>
-<li><b>Полная раздача</b> — раздача до конца, с флопом, тёрном и ривером, и разбор каждого шага.</li>
+<li><b>Полная раздача</b> — решённые солвером раздачи BTN против BB: играешь флоп и тёрн против соперника, который играет по солверу, а в конце получаешь разбор каждого решения.</li>
 </ul>
 <h3>Как играть</h3>
 <ul>
@@ -2798,64 +2801,224 @@ async function personalLoad(){
 }
 
 // SOLVER-VIEW START
-// Solver hand analysis (Ranges → «Солвер»). Data: solver/index.json + per spot flop.json and t-<card>.json,
-// produced by compact.cjs + split-solver.cjs from TexasSolver runs on 2/5, 100 BB. Strategy per hand class,
-// range-weighted action frequencies, borderline hands (mixed strategy). No range charts are embedded here.
-let SOLVER_VIEW=false,SVS={index:null,spot:null,flop:null,turns:{},path:[],loading:false,err:''};
-const SV_BASE='solver/';
+// «Полная раздача»: solved hands at the table (BTN vs BB, 2/5, 100 BB). Data: solver/index.json + per spot flop.json and
+// t-<card>.json (compact.cjs + split-solver.cjs from TexasSolver). The bot plays the solver strategy of its hand class; the hero's
+// decisions are graded against the solver mix of the hero's class and explained after the hand in J. Little's terms.
+const SV_BASE='solver/',SHC={index:null,flop:{},turn:{}};
 async function svJson(url){const r=await fetch(SV_BASE+url,{cache:'force-cache'});if(!r.ok)throw Error(url+' '+r.status);return r.json();}
-function svSelect(on){
- SOLVER_VIEW=!!on;$('#rng-solver').setAttribute('aria-pressed',String(SOLVER_VIEW));$('#solver-content').hidden=!SOLVER_VIEW;
- if(SOLVER_VIEW){$('#rng-standard').setAttribute('aria-pressed','false');$('#rng-personal').setAttribute('aria-pressed','false');$('#personal-content').hidden=true;$('#standard-ranges').hidden=true;svRender();}
-}
-{const base=personalSelect;personalSelect=function(on){if(SOLVER_VIEW){SOLVER_VIEW=false;$('#rng-solver').setAttribute('aria-pressed','false');$('#solver-content').hidden=true;}return base(on);};}
-const SV_NAMES={X:'Чек',C:'Колл',F:'Фолд',A:'Олл-ин'};
-function svActName(a,pot){const k=a[0],n=+a.slice(1);if((k==='B'||k==='R')&&SVS.flop&&n>=SVS.flop.stack*0.9)return 'Олл-ин';if(k==='B'||k==='R'){const pct=Math.round(n/pot*100);return (k==='B'?'Ставка ':'Рейз до ')+n+(k==='B'?' ('+pct+'%)':'');}return SV_NAMES[k]||a;}
-function svColor(a,i,acts){const k=a[0];if((k==='B'||k==='R')&&SVS.flop&&+a.slice(1)>=SVS.flop.stack*0.9)return '#7a1f1f';if(k==='F')return 'var(--fold)';if(k==='X'||k==='C')return 'var(--call)';if(k==='A')return '#7a1f1f';
- const bets=acts.filter(x=>x[0]==='B'||x[0]==='R'),j=bets.indexOf(a);return ['#f0a35e','#e07a2e','#b5521b','#8c3a12'][Math.min(3,j)];}
-function svNode(path){const key=path.join('/');if(SVS.flop&&SVS.flop.nodes[key])return SVS.flop.nodes[key];const card=path.find(x=>/^[2-9TJQKA][shdc]$/.test(x));return card&&SVS.turns[card]?SVS.turns[card].nodes[key]:null;}
-function svWho(p){return p==='oop'?SVS.spot.oop:SVS.spot.ip;}
-async function svOpen(id){SVS.loading=true;SVS.err='';SVS.path=[];SVS.turns={};svRender();try{SVS.spot=SVS.index.spots.find(s=>s.id===id);SVS.flop=await svJson(id+'/flop.json');}catch(e){SVS.err='Не удалось загрузить разбор.';}SVS.loading=false;svRender();}
-async function svTurn(card){if(!SVS.turns[card]){SVS.loading=true;svRender();try{SVS.turns[card]=await svJson(SVS.spot.id+'/t-'+card+'.json');}catch(e){SVS.err='Не удалось загрузить тёрн '+card+'.';}SVS.loading=false;}SVS.path.push(card);svRender();}
-function svCards(s){return s.match(/../g).map(c=>{const e=cardEl(c);e.classList.add('svcard');return e;});}
-function svGrid(node){const R='AKQJT98765432',g=document.createElement('div');g.className='grid svgrid';
- for(let i=0;i<13;i++)for(let j=0;j<13;j++){const hc=i===j?R[i]+R[j]:i<j?R[i]+R[j]+'s':R[j]+R[i]+'o',cell=document.createElement('div');cell.className='cell';cell.textContent=hc;const s=node.c[hc];
-  if(s){let acc=0;const stops=[];s.forEach((p,k)=>{if(!p)return;const col=svColor(node.a[k],k,node.a);stops.push(`${col} ${acc}% ${acc+p}%`);acc+=p;});cell.style.background=`linear-gradient(90deg,${stops.join(',')})`;cell.style.color='#fff';cell.title=hc+': '+node.a.map((a,k)=>svActName(a,node.pot)+' '+s[k]+'%').join(', ');}
-  else cell.classList.add('svout');g.append(cell);}
- return g;}
-function svSummary(node){const lines=[],acts=node.a,cls=Object.entries(node.c);
- const main=acts.map((a,k)=>[a,node.f[k],k]).sort((x,y)=>y[1]-x[1]);
- lines.push(`${svWho(node.p)} ${main.filter(x=>x[1]>=3).map(x=>svActName(x[0],node.pot).toLowerCase()+' '+x[1]+'%').join(', ')}.`);
- for(const [a,f,k] of main.slice(0,3)){if(f<5)continue;const top=cls.filter(([,s])=>s[k]>=70).map(([h])=>h);if(top.length)lines.push(`${svActName(a,node.pot)}: ${top.slice(0,14).join(', ')}${top.length>14?' и др.':'.'}`);}
- const edge=(node.edge||[]).filter(h=>node.c[h]&&Math.max(...node.c[h])<80);if(edge.length)lines.push(`Пограничные (смешанная стратегия): ${edge.slice(0,16).map(h=>h+' '+node.c[h].map((p,k)=>p>=10?svActName(acts[k],node.pot).split(' ')[0].toLowerCase()+' '+p:'').filter(Boolean).join('/')).join('; ')}${edge.length>16?' и др.':'.'} Здесь выбор зависит от соперника: против пассивного чаще ставь на вэлью, против агрессивного чаще чекай/коллируй.`);
- return lines;}
-function svRender(){
- const box=$('#solver-content');if(!box||!SOLVER_VIEW)return;box.replaceChildren();
- const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;};
- if(!SVS.index){if(!SVS.loading){SVS.loading=true;svJson('index.json').then(j=>{SVS.index=j;}).catch(()=>{SVS.err='Разборы ещё не опубликованы.';}).finally(()=>{SVS.loading=false;svRender();});}box.append(el('p','hint',SVS.err||'Загружаю разборы…'));return;}
- box.append(el('p','hint','Раздачи посчитаны в солвере (TexasSolver) на диапазонах Литтла 2/5, 100 ББ, опен 15. Дерево: флоп 33/66%, тёрн 66%, ривер 50/100%, рейзы и олл-ин. Точность около 1% банка. Частоты — по реальному диапазону, который доходит до узла.'));
- const list=el('div','controls svspots');for(const s of SVS.index.spots){const b=el('button','rngtab',s.title);b.type='button';b.setAttribute('aria-pressed',String(SVS.spot&&SVS.spot.id===s.id));b.onclick=()=>svOpen(s.id);list.append(b);}box.append(list);
- if(SVS.err)box.append(el('p','hint',SVS.err));
- if(!SVS.spot){box.append(el('p','hint','Выбери раздачу.'));return;}
- if(SVS.loading||!SVS.flop){box.append(el('p','hint','Загружаю…'));return;}
- const head=el('div','svhead');head.append(el('b','',SVS.spot.title+' · '));head.append(...svCards(SVS.flop.board));if(SVS.path.length){const card=SVS.path.find(x=>/^[2-9TJQKA][shdc]$/.test(x));if(card)head.append(...svCards(card));}box.append(head);
- // line breadcrumbs
- const crumbs=el('div','svcrumbs');const reset=el('button','linkbtn','Флоп');reset.type='button';reset.onclick=()=>{SVS.path=[];svRender();};crumbs.append(reset);
- SVS.path.forEach((a,i)=>{const b=el('button','linkbtn',/^[2-9TJQKA][shdc]$/.test(a)?'тёрн '+a:(svNode(SVS.path.slice(0,i))?svActName(a,svNode(SVS.path.slice(0,i)).pot):a));b.type='button';b.onclick=()=>{SVS.path=SVS.path.slice(0,i+1);svRender();};crumbs.append(el('span','',' → '),b);});box.append(crumbs);
- const node=svNode(SVS.path);
- if(!node){const last=SVS.path[SVS.path.length-1]||'';const prev=svNode(SVS.path.slice(0,-1));
-  if(last[0]==='F'){box.append(el('p','hint','Фолд — раздача окончена.'));return;}
-  const turnsDone=SVS.path.some(x=>/^[2-9TJQKA][shdc]$/.test(x));
-  if(!turnsDone&&(last==='C'||last==='X')&&SVS.index&&SVS.spot.turns){box.append(el('p','','Выбери карту тёрна:'));const tc=el('div','svturns');for(const c of SVS.spot.turns){const b=el('button','rngtab',c);b.type='button';b.onclick=()=>svTurn(c);tc.append(b);}box.append(tc);return;}
-  box.append(el('p','hint',turnsDone?'Дальше ривер: в этой версии разбора ривер не выгружен.':'Конец линии.'));void prev;return;}
- box.append(el('p','svinfo',`Ходит ${svWho(node.p)} · банк ${node.pot}${node.toCall?' · к коллу '+node.toCall:''} · комбинаций в диапазоне ${node.combos}`));
- const acts=el('div','svacts');node.a.forEach((a,k)=>{const b=el('button','rngtab',svActName(a,node.pot)+' · '+node.f[k]+'%');b.type='button';b.style.borderColor=svColor(a,k,node.a);b.onclick=()=>{SVS.path.push(a);svRender();};acts.append(b);});box.append(acts);
- const bar=el('div','svbar');node.a.forEach((a,k)=>{if(!node.f[k])return;const s=el('span','');s.style.width=node.f[k]+'%';s.style.background=svColor(a,k,node.a);s.title=svActName(a,node.pot)+' '+node.f[k]+'%';bar.append(s);});box.append(bar);
- box.append(svGrid(node));
- const lg=el('div','legend');node.a.forEach((a,k)=>{const s=el('span','');const i=el('i','');i.style.background=svColor(a,k,node.a);s.append(i,document.createTextNode(svActName(a,node.pot)));lg.append(s);});box.append(lg);
- for(const l of svSummary(node))box.append(el('p','',l));
-}
-$('#rng-solver').onclick=()=>svSelect(true);
+let SH=null,SHS={hands:0,dec:0,good:0,ok:0,net:0},SH_T=null;
+const SH_RANKS='AKQJT98765432',SH_SUITS='shdc',SH_SYM={s:'♠',h:'♥',d:'♦',c:'♣'};
+const shIsCard=x=>/^[2-9TJQKA][shdc]$/.test(x);
+const shCardTxt=c=>(c[0]==='T'?'10':c[0])+SH_SYM[c[1]];
+function shAllin(a,stack){const k=a[0];return k==='A'||(k==='B'||k==='R')&&+a.slice(1)>=stack*0.9;}
+function shActName(a,pot,stack){const k=a[0],n=+a.slice(1);if(shAllin(a,stack))return 'Олл-ин';if(k==='B')return 'Ставка '+n+' ('+Math.round(n/(pot)*100)+'%)';if(k==='R')return 'Рейз до '+n;return {X:'Чек',C:'Колл',F:'Фолд'}[k]||a;}
+function shVerb(a,stack){const k=a[0],n=+a.slice(1);if(shAllin(a,stack))return 'пошёл олл-ин';if(k==='B')return 'поставил '+n;if(k==='R')return 'рейзнул до '+n;return shActShort(a,stack);}
+function shActShort(a,stack){const k=a[0],n=+a.slice(1);if(shAllin(a,stack))return 'олл-ин';if(k==='B')return 'ставка '+n;if(k==='R')return 'рейз до '+n;return {X:'чек',C:'колл',F:'фолд'}[k]||a;}
+function shExpand(cls){const a=cls[0],b=cls[1],out=[];if(a===b){for(let x=0;x<4;x++)for(let y=x+1;y<4;y++)out.push([a+SH_SUITS[x],b+SH_SUITS[y]]);}
+ else if(cls[2]==='s'){for(const s of SH_SUITS)out.push([a+s,b+s]);}else for(const s of SH_SUITS)for(const u of SH_SUITS)if(s!==u)out.push([a+s,b+u]);return out;}
+function shCls(c){const [x,y]=c,a=x[0],b=y[0];if(a===b)return a+b;const s=x[1]===y[1]?'s':'o';return SH_RANKS.indexOf(a)<SH_RANKS.indexOf(b)?a+b+s:b+a+s;}
+function shPick(ws){let t=0;for(const w of ws)t+=w;let r=Math.random()*t;for(let i=0;i<ws.length;i++){r-=ws[i];if(r<=0)return i;}return ws.length-1;}
+function shNode(h,path=h.path){const key=path.join('/'),f=SHC.flop[h.spot.id];if(f&&f.nodes[key])return f.nodes[key];const card=path.find(shIsCard),t=card&&SHC.turn[h.spot.id+'/'+card];return t?t.nodes[key]||null:null;}
+
+// ---------- hand reading ----------
+const shRv=c=>RV[c[0]];
+function shInfo(hole,board){
+ const all=hole.concat(board),val=eval7(all.map(toInt)),cat=Math.floor(val/1e6),br=board.map(shRv).sort((a,b)=>b-a),ub=[...new Set(br)];
+ const hr=hole.map(shRv).sort((a,b)=>b-a),pocket=hr[0]===hr[1],bval=eval7(board.map(toInt)),bcat=Math.floor(bval/1e6);
+ const info={cat,val,tier:0,made:'',draws:[],strongDraw:false,weakDraw:false};
+ const names={4:'стрит',5:'флеш',6:'фулл-хаус',7:'каре',8:'стрит-флеш'};
+ if(cat>=4&&cat>bcat){info.made=names[cat];info.tier=5;}
+ else if(cat===3&&bcat<3){info.made=pocket?'сет':'трипс';info.tier=5;}
+ else if(cat===2&&bcat<1&&!pocket){info.made=hr[0]===ub[0]&&hr[1]===ub[1]?'две верхние пары':'две пары';info.tier=hr.every(r=>ub.includes(r))?5:4;}
+ else{ // one pair category (also pair + board pair)
+  const hits=hr.filter(r=>ub.includes(r));let pr=pocket?hr[0]:hits.length?Math.max(...hits):0;
+  if(pocket&&ub.includes(hr[0])){info.made='сет';info.tier=5;}
+  else if(pr){const kick=pocket?0:hr.find(r=>r!==pr)||0;
+   if(pocket&&pr>ub[0]){info.made='оверпара';info.tier=pr>=12?4:3;}
+   else if(pr===ub[0]){const good=kick>=12||kick>=10&&ub[0]===14;info.made='топ-пара'+(good?' с сильным кикером':' со слабым кикером');info.tier=good?4:3;}
+   else if(pocket&&pr<ub[ub.length-1]){info.made='карманная пара ниже доски';info.tier=1;}
+   else if(pr===ub[ub.length-1]){info.made='нижняя пара';info.tier=1;}
+   else{info.made=pocket?'карманная пара между картами доски':'средняя пара';info.tier=2;}}
+  else{info.made=hr[0]>ub[0]&&hr[1]>ub[0]?'две оверкарты':hr[0]===14?'туз-хай':'ничего';info.tier=0;}
+ }
+ if(board.length<5&&info.tier<5){
+  for(const s of SH_SUITS){const n=all.filter(c=>c[1]===s).length,hn=hole.filter(c=>c[1]===s).length;
+   if(n===4&&hn){const nut=hole.some(c=>c[1]===s&&c[0]==='A');info.draws.push(nut?'натсовое флеш-дро':'флеш-дро');info.strongDraw=true;}
+   else if(n===3&&hn&&board.length===3&&hn>=1&&board.filter(c=>c[1]===s).length<=2)info.backdoor=true;}
+  const mask=rs=>{let m=0;for(const r of rs){m|=1<<r;if(r===14)m|=2;}return m;};
+  const outs=rs=>{let o=0;const m0=mask(rs);if(straightHi(m0))return -1;for(let r=2;r<=14;r++){if(rs.includes(r))continue;if(straightHi(m0|mask([r])))o++;}return o;};
+  const o=outs(all.map(shRv)),ob=outs(board.map(shRv));
+  if(o>=2&&o>Math.max(ob,0)){info.draws.push('двусторонний стрит-дро');info.strongDraw=true;}
+  else if(o===1&&ob<1){info.draws.push('гатшот');info.weakDraw=true;}
+  if(info.backdoor&&!info.strongDraw)info.weakDraw=true;
+  if(info.tier===0&&info.made==='две оверкарты')info.weakDraw=true;
+ }
+ return info;}
+function shHandText(i){let t=i.made;if(i.draws.length)t+=(t&&i.made!=='ничего'?' + ':'')+i.draws.join(' + ');if(i.made==='ничего'&&i.draws.length)t=i.draws.join(' + ');if(i.backdoor&&!i.strongDraw)t+=' (бэкдор на флеш)';return t;}
+function shTexture(board){const f=board.slice(0,3),r=f.map(shRv).sort((a,b)=>b-a),suits=new Set(f.map(c=>c[1])).size,paired=new Set(r).size<3,span=r[0]-r[2];
+ const conn=!paired&&span<=4,low=r[0]<=9,tone=suits===1?'одномастная':suits===2?'двухмастная':'радужная';
+ const wet=suits===1||conn&&suits===2||conn&&low;const dry=!wet&&(paired||suits===3&&span>=6||r[0]>=13&&suits===3&&!conn);
+ return {label:(paired?'спаренная ':'')+(conn?'связанная ':'')+(low?'низкая ':r[0]>=13?'высокая ':'')+tone,wet,dry,low,conn,paired,high:r[0]>=13};}
+
+// ---------- villain range and equity ----------
+function shRangeInit(h,side){const node=side==='oop'?shNode(h,[]):shNode(h,['X']),dead=new Set(h.board.concat(h.hero)),out=[];
+ for(const cls of Object.keys(node.c))for(const cmb of shExpand(cls))if(!dead.has(cmb[0])&&!dead.has(cmb[1]))out.push({c:cmb,cls,w:1});return out;}
+function shEquity(hero,board,range,limit=400){const live=range.filter(x=>x.w>1e-4&&!board.includes(x.c[0])&&!board.includes(x.c[1])&&!hero.includes(x.c[0])&&!hero.includes(x.c[1]));if(!live.length)return null;
+ const sample=live.length>limit?live.sort((a,b)=>b.w-a.w).slice(0,limit):live;let W=0,E=0;const hi=hero.map(toInt),bi=board.map(toInt);
+ for(const v of sample){const dead=new Set(board.concat(hero,v.c)),deck=[];for(const r of SH_RANKS)for(const s of SH_SUITS)if(!dead.has(r+s))deck.push(toInt(r+s));const vi=v.c.map(toInt);let win=0,n=0;
+  if(board.length===5){const a=eval7(hi.concat(bi)),b=eval7(vi.concat(bi));win=a>b?1:a===b?.5:0;n=1;}
+  else if(board.length===4){for(const c of deck){const a=eval7(hi.concat(bi,[c])),b=eval7(vi.concat(bi,[c]));win+=a>b?1:a===b?.5:0;n++;}}
+  else{for(let k=0;k<40;k++){const i=Math.floor(Math.random()*deck.length);let j=Math.floor(Math.random()*(deck.length-1));if(j>=i)j++;const x=[deck[i],deck[j]],a=eval7(hi.concat(bi,x)),b=eval7(vi.concat(bi,x));win+=a>b?1:a===b?.5:0;n++;}}
+  W+=v.w;E+=v.w*win/n;}
+ return E/W;}
+function shRangeMix(h,range,board){let t=0;const g=[0,0,0,0];for(const v of range){if(v.w<1e-4||board.includes(v.c[0])||board.includes(v.c[1])||h.hero.includes(v.c[0])||h.hero.includes(v.c[1]))continue;const i=shInfo(v.c,board),k=i.tier>=4?0:i.tier>=2?1:i.strongDraw?2:3;g[k]+=v.w;t+=v.w;}
+ return t?g.map(x=>Math.round(x/t*100)):null;}
+
+// ---------- game flow ----------
+function shOn(){return GAME==='hand';}
+async function shLoadSpot(spot){if(!SHC.flop[spot.id])SHC.flop[spot.id]=await svJson(spot.id+'/flop.json');}
+async function shLoadTurn(h,card){const k=h.spot.id+'/'+card;if(!SHC.turn[k])SHC.turn[k]=await svJson(h.spot.id+'/t-'+card+'.json');}
+function shIdle(msg){clearTimeout(SH_T);SH_T=null;SH=null;H=null;IDLE=true;const t=$('#table');t.innerHTML='';const rail=document.createElement('div');rail.className='rail';const felt=document.createElement('div');felt.className='felt';const board=document.createElement('div');board.className='board';for(let i=0;i<5;i++)board.appendChild(cardEl(null));felt.appendChild(board);rail.appendChild(felt);t.appendChild(rail);
+ if(!personalOwner()){$('#log').textContent='Режим доступен только владельцам.';$('#panel').replaceChildren();return;}
+ const b=document.createElement('button');b.className='startbtn';b.id='start';b.type='button';b.textContent='Начать раздачу';b.onclick=shNew;t.appendChild(b);
+ $('#log').innerHTML='';$('#log').append(msg||'Решённые раздачи: BTN против BB, 2/5, 100 ББ, опен 15. Соперник играет по солверу. Разбор — в конце раздачи.');
+ const p=$('#panel');p.replaceChildren();if(SHS.hands){const s=document.createElement('p');s.className='hint';s.textContent=`Сессия: раздач ${SHS.hands}, решений ${SHS.dec}, по солверу ${SHS.good}, допустимо ${SHS.ok}, итог ${SHS.net>0?'+':''}${SHS.net}.`;p.append(s);}
+ try{b.focus({preventScroll:true});}catch(e){}}
+async function shNew(){if(!shOn()||!personalOwner())return;clearTimeout(SH_T);SH_T=null;
+ try{if(!SHC.index)SHC.index=await svJson('index.json');const spot=SHC.index.spots[Math.floor(Math.random()*SHC.index.spots.length)];await shLoadSpot(spot);if(!shOn())return;
+  const f=SHC.flop[spot.id],heroSide=Math.random()<.5?'oop':'ip',h={spot,stack:f.stack,pot0:f.pot,board:f.board.match(/../g),heroSide,path:[],bet:{oop:0,ip:0},inv:{oop:0,ip:0},decisions:[],log:[],street:1,over:false};
+  // hero hand: by combos, borderline classes twice as likely
+  const first=heroSide==='oop'?shNode(h,[]):shNode(h,['X']),cands=[],ws=[];for(const [cls,s] of Object.entries(first.c)){for(const cmb of shExpand(cls)){if(h.board.includes(cmb[0])||h.board.includes(cmb[1]))continue;cands.push(cmb);ws.push(Math.max(...s)<80?3:1);}}
+  h.hero=cands[shPick(ws)];h.range=shRangeInit(h,heroSide==='oop'?'ip':'oop');const vi=h.range.filter(x=>!h.hero.includes(x.c[0])&&!h.hero.includes(x.c[1]));h.vill=vi[Math.floor(Math.random()*vi.length)].c;
+  SH=h;H=null;IDLE=false;h.log.push({street:1,txt:'Флоп '+h.board.map(shCardTxt).join(' ')});shStep();}
+ catch(e){shIdle('Не удалось загрузить решённые раздачи. Проверь связь и нажми ещё раз.');}}
+function shSide(h,s){return s===h.heroSide?'hero':'vill';}
+function shName(h,s){return s==='oop'?'BB':'BTN';}
+function shLeft(h,s){return h.stack-h.inv[s]-h.bet[s];}
+function shPot(h){return h.pot0+h.inv.oop+h.inv.ip;}
+function shStep(){const h=SH;if(!h||h.over)return;const node=shNode(h);
+ if(!node){return shRunout(h,'Дальше эта линия в солвере не посчитана, поэтому карты открываются без торговли.');}
+ h.node=node;if(node.p===h.heroSide){shRender();return;}
+ shRender();SH_T=setTimeout(()=>{SH_T=null;if(SH!==h)return;const cls=shCls(h.vill),s=node.c[cls]||node.f,k=shPick(s.map(x=>x+1e-6));shApply(h,node,node.a[k],k);},750);}
+function shApply(h,node,a,k){const side=node.p,other=side==='oop'?'ip':'oop',kind=a[0],n=+a.slice(1);
+ if(shSide(h,side)==='vill'){for(const v of h.range){const s=node.c[v.cls];v.w*=s?s[k]/100:0;}}
+ h.log.push({street:h.street,side,a,txt:shName(h,side)+(shSide(h,side)==='hero'?' (ты)':'')+': '+shActShort(a,h.stack)});
+ try{if(kind==='F')sndFold();else if(kind!=='X')sndChips();}catch(e){}
+ h.path.push(a);
+ if(kind==='F'){h.over=true;h.winner=other;h.outcome='fold';return shFinish(h);}
+ if(kind==='B'||kind==='R')h.bet[side]=n;else if(kind==='A')h.bet[side]=h.stack-h.inv[side];
+ if(kind==='B'||kind==='R'||kind==='A'){if(h.bet[side]>=h.stack-h.inv[side])h.bet[side]=h.stack-h.inv[side];return shStep();}
+ let closed=false;if(kind==='C'){h.bet[side]=Math.min(h.bet[other],h.stack-h.inv[side]);closed=true;}else if(kind==='X'&&side==='ip')closed=true;
+ if(!closed)return shStep();
+ h.inv.oop+=h.bet.oop;h.inv.ip+=h.bet.ip;h.bet={oop:0,ip:0};
+ if(shLeft(h,'oop')<=0||shLeft(h,'ip')<=0)return shRunout(h,'Олл-ин: оставшиеся карты открываются.');
+ if(h.street===1)return shDealTurn(h);
+ return shRunout(h,'Ривер открывается без торговли: в солвере решения посчитаны на флопе и тёрне.');}
+async function shDealTurn(h){const dead=new Set(h.board.concat(h.hero,h.vill)),opts=(h.spot.turns||[]).filter(c=>!dead.has(c));if(!opts.length)return shRunout(h,'');const card=opts[Math.floor(Math.random()*opts.length)];
+ h.street=2;h.board.push(card);h.path.push(card);for(const v of h.range)if(v.c.includes(card))v.w=0;h.log.push({street:2,txt:'Тёрн '+shCardTxt(card)});
+ try{await shLoadTurn(h,card);}catch(e){return shRunout(h,'Тёрн не загрузился, карты открываются без торговли.');}if(SH!==h)return;shStep();}
+function shRunout(h,why){const dead=new Set(h.board.concat(h.hero,h.vill)),deck=[];for(const r of SH_RANKS)for(const s of SH_SUITS)if(!dead.has(r+s))deck.push(r+s);
+ h.inv.oop+=h.bet.oop;h.inv.ip+=h.bet.ip;h.bet={oop:0,ip:0};
+ if(h.board.length<5)h.eqBefore=shEquity(h.hero,h.board,[{c:h.vill,cls:'',w:1}]);
+ while(h.board.length<5){const i=Math.floor(Math.random()*deck.length);h.board.push(deck.splice(i,1)[0]);}
+ const a=eval7(h.hero.concat(h.board).map(toInt)),b=eval7(h.vill.concat(h.board).map(toInt));h.outcome='showdown';h.winner=a>b?h.heroSide:a<b?(h.heroSide==='oop'?'ip':'oop'):'split';h.heroVal=a;h.villVal=b;h.runoutWhy=why;h.over=true;shFinish(h);}
+function shFinish(h){clearTimeout(SH_T);SH_T=null;const pot=shPot(h)+h.bet.oop+h.bet.ip,heroIn=15+h.inv[h.heroSide]+h.bet[h.heroSide];
+ h.net=Math.round((h.winner==='split'?pot/2:h.winner===h.heroSide?pot:0)-heroIn);SHS.hands++;SHS.net+=h.net;for(const d of h.decisions){SHS.dec++;if(d.grade===2)SHS.good++;else if(d.grade===1)SHS.ok++;}
+ shRender();}
+function shHeroAct(k){const h=SH;if(!h||h.over||SH_T||!h.node||h.node.p!==h.heroSide)return;const node=h.node,a=node.a[k];if(a==null)return;
+ const cls=shCls(h.hero),s=node.c[cls]||node.f,info=shInfo(h.hero,h.board),eq=shEquity(h.hero,h.board,h.range),mix=shRangeMix(h,h.range,h.board);
+ const best=s.indexOf(Math.max(...s)),grade=s[k]>=35||k===best?2:s[k]>=10?1:0;
+ h.decisions.push({street:h.street,board:h.board.slice(),node,k,a,s:s.slice(),best,grade,info,eq,mix,cls,path:h.path.slice(),pot:node.pot,toCall:node.toCall});
+ shApply(h,node,a,k);}
+
+// ---------- J. Little style analysis ----------
+const SHL={
+ rangeDry:'Литтл всегда начинает со сравнения диапазонов, а не только своей руки. На сухой доске со старшей картой у рейзера из позиции преимущество диапазона, поэтому частая мелкая ставка приносит прибыль почти всем диапазоном.',
+ lowConn:'Литтл подчёркивает: низкие связанные доски бьют по диапазону рейзера, контбет здесь не автоматический — нужно больше чеков и более крупный размер, когда ставишь.',
+ oop:'Без позиции против плотного колла Литтл советует больше чеков: инициатива с префлопа не заменяет преимущество диапазона.',
+ medium:'Средняя готовая рука, по Литтлу, чаще сохраняет шоудаун через контроль банка. Ставить ей стоит, когда платят хуже; против агрессивного соперника, который рейзит, тот же бет хуже чека.',
+ strongDry:'На сухой доске у соперника мало эквити, поэтому с сильной рукой Литтл добирает небольшими ставками: крупная ставка выбивает всё, что могло бы заплатить. Медленный розыгрыш уместен только там, где нечего защищать.',
+ strong:'С сильной рукой Литтл ставит на вэлью, особенно на влажной доске, где у соперника много эквити. Но не все сильные руки идут в рейз: часть коллов и чеков защищает остальной диапазон.',
+ drawStrong:'Сильные дро Литтл разыгрывает агрессивно: у полублефа есть и фолд-эквити, и ауты. Особенно это важно без позиции — блефам без позиции нужно эквити.',
+ drawWeak:'Слабому дро нужна цена. Литтл напоминает: нельзя считать ауты сразу до ривера, если на тёрне ещё придётся платить новую ставку.',
+ air:'Блеф, по Литтлу, строится по диапазону соперника и ожидаемым фолдам, а не по желанию показать агрессию. Без эквити и полезных блокеров чаще сдавайся.',
+ price:'Порог колла: ставка ÷ (банк + 2 ставки). MDF — не приказ платить любой рукой: против соперника, который мало блефует, Литтл советует фолдить чаще.',
+ raise:'Против крупных линий у недоблефующих игроков Литтл фолдит чаще; против настоящего переблефа нужны более широкие коллы.',
+ barrel:'Литтл: линия ставка–ставка–чек допустима. Ставка тёрна добирает и выбивает эквити, но плохая карта тёрна может остановить баррелинг.',
+ xr:'Частота чек-рейза, по Литтлу, зависит от натсов и размера ставки соперника. Против слишком частого контбета чек-рейзи чаще.'};
+function shDecText(h,d,i,used){const me=h.heroSide,node=d.node,cls=d.cls,stack=h.stack,act=x=>shActName(x,node.pot,stack),tex=shTexture(d.board),inf=d.info,out=[];
+ const street=d.street===1?'Флоп':'Тёрн',facing=node.toCall>0;
+ out.push(`${street} ${d.board.map(shCardTxt).join(' ')} — ${tex.label} доска. У тебя ${h.hero.map(shCardTxt).join('')}: ${shHandText(inf)}.`);
+ const prev=d.path.filter(x=>!shIsCard(x)),lastV=prev.length?prev[prev.length-1]:null;
+ if(facing){const need=node.toCall/(node.pot+node.toCall);out.push(`${shName(h,me==='oop'?'ip':'oop')} ${shVerb(lastV,stack)}, банк ${node.pot}, тебе доплатить ${node.toCall}. Нужно ${Math.round(need*100)}% эквити${d.eq!=null?`, против его диапазона в этой линии у тебя около ${Math.round(d.eq*100)}%`:''}.`);}
+ else if(d.eq!=null)out.push(`${me==='ip'?'Ты в позиции':'Ты без позиции'}. Против его диапазона в этой линии у тебя около ${Math.round(d.eq*100)}% эквити.`);
+ if(d.mix)out.push(`Его диапазон здесь: сильные руки ${d.mix[0]}%, средние ${d.mix[1]}%, дро ${d.mix[2]}%, слабые ${d.mix[3]}%.`);
+ const order=d.s.map((p,k)=>[p,k]).filter(x=>x[0]>=3).sort((a,b)=>b[0]-a[0]).map(([p,k])=>act(node.a[k])+' '+p+'%').join(', ');
+ out.push(`Солвер с ${cls}: ${order}. Ты выбрал «${act(d.a).toLowerCase()}» (${d.s[d.k]}%) — ${d.grade===2?'это по солверу':d.grade===1?'допустимо, это часть смешанной стратегии':'ошибка, солвер почти так не играет'}.`);
+ const sk=node.a[d.best][0],aggr=sk==='B'||sk==='R'||sk==='A',vAggr=prev.filter(x=>x[0]==='B'||x[0]==='R'||x[0]==='A').length,cands=[];
+ if(facing&&vAggr>=2&&inf.tier<5)cands.push('raise');
+ if(facing&&node.a.some(x=>x[0]==='R')&&(sk==='R'||sk==='A')&&inf.tier>=4)cands.push('xr');
+ if(inf.tier>=4)cands.push(tex.dry||tex.paired?'strongDry':'strong');
+ if(inf.strongDraw)cands.push('drawStrong');
+ if(inf.weakDraw&&inf.tier<2)cands.push('drawWeak');
+ if(facing)cands.push('price');
+ if(!facing&&d.street===2&&h.decisions.slice(0,i).some(x=>x.street===1&&(x.a[0]==='B'||x.a[0]==='R')))cands.push('barrel');
+ if(inf.tier>=2&&inf.tier<4)cands.push('medium');
+ if(!facing&&me==='ip'&&d.street===1&&tex.dry)cands.push('rangeDry');
+ if(!facing&&d.street===1&&(tex.low||tex.conn))cands.push('lowConn');
+ if(!facing&&me==='oop')cands.push('oop');
+ if(inf.tier<2&&!inf.strongDraw)cands.push('air');
+ const pk=cands.find(c=>!used.has(c));let p=null;if(pk){used.add(pk);p=SHL[pk];}
+ if(p)out.push(p);
+ const mixed=Math.max(...d.s)<80;if(mixed){
+  const passive=aggr?'против пассивного плательщика ставь чаще: он платит худшими руками':'против пассивного соперника чаще выбирай пассивную линию — он редко наказывает чек',agro=aggr?'против агрессивного, который часто рейзит, чаще выбирай чек или колл':'против агрессивного, который часто блефует, чаще плати и давай ему ставить самому';
+  out.push(`Рука пограничная: ${passive}, а ${agro}.`);}
+ return {head:`${i+1}. ${street}: ${act(d.a)}`,grade:d.grade,lines:out};}
+function shSummary(h){const n=h.decisions.length,good=h.decisions.filter(d=>d.grade===2).length,bad=h.decisions.filter(d=>d.grade===0),lines=[];
+ const vInfo=shInfo(h.vill,h.board.slice(0,Math.max(3,h.board.length)));
+ if(h.outcome==='fold')lines.push(h.winner===h.heroSide?`Соперник сбросил, банк твой. Итог: +${h.net}. У него было ${h.vill.map(shCardTxt).join('')}.`:`Ты сбросил. Итог: ${h.net}. У соперника было ${h.vill.map(shCardTxt).join('')}.`);
+ else lines.push(`${h.runoutWhy?h.runoutWhy+' ':''}Вскрытие: у тебя ${handName(h.heroVal)}, у соперника ${h.vill.map(shCardTxt).join('')} — ${handName(h.villVal)}. ${h.winner==='split'?'Банк делится.':h.winner===h.heroSide?'Банк твой.':'Банк забирает соперник.'} Итог: ${h.net>0?'+':''}${h.net}.${h.eqBefore!=null?` Перед открытием карт твоё эквити против его руки было ${Math.round(h.eqBefore*100)}%.`:''}`);
+ if(n)lines.push(`Решений ${n}, по солверу ${good}${bad.length?`, ошибок ${bad.length}`:''}. ${bad.length?'Главное — не результат раздачи, а качество решений: Литтл всегда отделяет исход от правильности линии.':h.net<0?'Ты сыграл по солверу и проиграл — это дисперсия, решение было верным. Литтл: результат раздачи не равен качеству решения.':'Хорошо сыграно.'}`);
+ else lines.push('Тебе не пришлось принимать решений в этой раздаче.');
+ void vInfo;return lines;}
+
+// ---------- rendering ----------
+function shRender(){const h=SH;if(!h||!shOn())return;const t=$('#table');t.innerHTML='';
+ const rail=document.createElement('div');rail.className='rail';const felt=document.createElement('div');felt.className='felt';const pot=shPot(h);
+ const pl=document.createElement('div');pl.className='potline';pl.textContent=`Банк ${pot} · ${h.spot.title.split(' · ')[0]}`;const board=document.createElement('div');board.className='board';for(let i=0;i<5;i++)board.appendChild(cardEl(h.board[i]||null));
+ felt.append(pl,board);rail.appendChild(felt);t.appendChild(rail);
+ for(const side of ['oop','ip']){const hero=side===h.heroSide,[x,y]=seatXY(hero?0:3,6),s=document.createElement('div');s.className='seat'+(hero?' hero':'');s.style.left=x+'%';s.style.top=y+'%';
+  if(hero){const hd=document.createElement('div');hd.className='hand';h.hero.forEach(c=>hd.appendChild(cardEl(c,'big')));s.appendChild(hd);}
+  else{const mini=document.createElement('div');mini.className='mini';if(h.over)h.vill.forEach(c=>mini.appendChild(cardEl(c,'up')));else for(let j=0;j<2;j++){const b=document.createElement('div');b.className='pc back';mini.appendChild(b);}s.appendChild(mini);}
+  if(!h.over&&h.node&&h.node.p===side)s.classList.add('turn');if(h.over&&h.outcome==='fold'&&h.winner!==side)s.classList.add('folded');
+  const pod=document.createElement('div');pod.className='pod';pod.innerHTML='<div class="pos"></div><div class="stk"></div>';pod.firstChild.textContent=shName(h,side)+(hero?' · ты':'');pod.lastChild.textContent=String(shLeft(h,side));
+  const last=[...h.log].reverse().find(l=>l.side);if(last&&last.side===side&&!h.over){const ab=document.createElement('div'),k=last.a[0];ab.className='actb '+(k==='F'?'f':k==='C'?'c':k==='X'?'':'r')+' new';ab.textContent=shActShort(last.a,h.stack);pod.appendChild(ab);}
+  s.appendChild(pod);t.appendChild(s);
+  if(h.bet[side]>0){const b=document.createElement('div');b.className='bet';const f=hero?.42:.36;b.style.left=(x+(50-x)*f)+'%';b.style.top=(y+(50-y)*f)+'%';b.textContent=h.bet[side];t.appendChild(b);}
+  if(side==='ip'){const d=document.createElement('div');d.className='dealer';d.textContent='D';const ang=Math.atan2(50-y,50-x)+0.55;d.style.left=(x+Math.cos(ang)*12)+'%';d.style.top=(y+Math.sin(ang)*12)+'%';t.appendChild(d);}}
+ const log=$('#log');log.replaceChildren();const parts=[];let cur=null;for(const l of h.log){if(!l.side){cur=[l.txt];parts.push(cur);}else cur.push(l.txt);}log.textContent=parts.map(p=>p[0]+(p.length>1?': '+p.slice(1).join(', '):'')).join(' · ');
+ if(!h.over&&h.node&&h.node.p===h.heroSide){const b=document.createElement('b');b.textContent=' · твой ход';log.append(b);}
+ const panel=$('#panel');panel.replaceChildren();
+ if(!h.over){if(h.node&&h.node.p===h.heroSide){const row=document.createElement('div');row.className='actions';row.style.gridTemplateColumns=`repeat(${Math.min(h.node.a.length,5)},minmax(0,1fr))`;
+   h.node.a.forEach((a,k)=>{const b=document.createElement('button'),kk=a[0];b.type='button';b.className='act '+(kk==='F'?'fold':kk==='X'?'check':kk==='C'?'call':'raise');b.id='sh-a'+k;const l=document.createElement('span');l.className='lbl';const nm=shActName(a,h.node.pot,h.stack);l.textContent=nm.replace(/ \(.*/,'').replace(/ \d+$/,'');b.append(l);
+    const sub=kk==='C'?String(h.node.toCall):kk==='B'||kk==='R'?(shAllin(a,h.stack)?String(shLeft(h,h.heroSide)):String(+a.slice(1))+(kk==='B'?' · '+Math.round(+a.slice(1)/h.node.pot*100)+'%':'')):kk==='A'?String(shLeft(h,h.heroSide)):'';if(sub){const sm=document.createElement('small');sm.textContent=sub;b.append(sm);}
+    b.onclick=()=>shHeroAct(k);row.append(b);});panel.append(row);}
+  return;}
+ const next=document.createElement('button');next.className='next';next.id='next';next.type='button';next.textContent='Следующая раздача ↵';next.onclick=shNew;panel.append(next);
+ const sum=document.createElement('div');sum.className='dec';for(const l of shSummary(h)){const p=document.createElement('p');p.textContent=l;sum.append(p);}panel.append(sum);
+ const used=new Set();h.decisions.forEach((d,i)=>{const x=shDecText(h,d,i,used),b=document.createElement('div');b.className='dec';const hd=document.createElement('div');hd.className='dech';const g=document.createElement('b');g.textContent=(x.grade===2?'✓ ':x.grade===1?'≈ ':'✗ ')+x.head;g.style.color=x.grade===2?'var(--good)':x.grade===1?'var(--muted)':'var(--bad)';hd.append(g);b.append(hd);
+  for(const l of x.lines){const p=document.createElement('p');p.textContent=l;b.append(p);}panel.append(b);});
+ try{next.focus({preventScroll:true});}catch(e){}}
+
+// ---------- hooks ----------
+{const baseNext=next;next=function(){if(shOn())return shNew();return baseNext.apply(this,arguments);};}
+{const baseIdle=idle;idle=function(){if(shOn())return shIdle();return baseIdle.apply(this,arguments);};}
+{const baseSet=setGame;setGame=function(g){if(g==='hand'&&!personalOwner())return;if(g!=='hand'&&SH){clearTimeout(SH_T);SH_T=null;SH=null;}const r=baseSet.apply(this,arguments);document.body.classList.toggle('shmode',g==='hand');return r;};}
+function shLockUi(){const b=$('#m-hand');if(!b)return;const own=personalOwner();b.classList.toggle('locked',!own);b.setAttribute('aria-disabled',String(!own));b.title=own?'Решённые солвером раздачи с разбором':'Доступно только владельцам';if(!own&&GAME==='hand'){setGame('pre');idle();}}
+{const baseRefresh=ptRefreshUi;ptRefreshUi=function(){const r=baseRefresh.apply(this,arguments);shLockUi();return r;};}
+document.addEventListener('keydown',e=>{if(!shOn()||document.getElementById('app').hidden||$('#settings-dialog').open||$('#training-filters').open||RNGV)return;if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;
+ e.stopImmediatePropagation();const h=SH;if(e.key==='Enter'||e.key===' '){if(!h||h.over){e.preventDefault();shNew();}return;}const n=+e.key;if(h&&!h.over&&n>=1&&n<=9){e.preventDefault();shHeroAct(n-1);}},true);
+{const b=$('#m-hand');if(b){b.innerHTML='Полная раздача';shLockUi();}}
 // SOLVER-VIEW END
 $('#rng-standard').onclick=()=>personalSelect(false);
 $('#rng-personal').onclick=()=>personalSelect(true);
