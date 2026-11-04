@@ -2809,7 +2809,8 @@ async function svJson(url){const r=await fetch(SV_BASE+url,{cache:'force-cache'}
 let SH=null,SHS={hands:0,dec:0,good:0,ok:0,net:0},SH_T=null;
 const SH_RANKS='AKQJT98765432',SH_SUITS='shdc',SH_SYM={s:'♠',h:'♥',d:'♦',c:'♣'};
 const shIsCard=x=>/^[2-9TJQKA][shdc]$/.test(x);
-const shCardTxt=c=>(c[0]==='T'?'10':c[0])+SH_SYM[c[1]];
+let SH_SP=null;const shDc=c=>c&&SH_SP?c[0]+SH_SP[c[1]]:c||null;
+const shCardTxt=c=>{c=shDc(c);return (c[0]==='T'?'10':c[0])+SH_SYM[c[1]];};
 function shAllin(a,stack){const k=a[0];return k==='A'||(k==='B'||k==='R')&&+a.slice(1)>=stack*0.9;}
 function shActName(a,pot,stack){const k=a[0],n=+a.slice(1);if(shAllin(a,stack))return 'Олл-ин';if(k==='B')return 'Ставка '+n+' ('+Math.round(n/(pot)*100)+'%)';if(k==='R')return 'Рейз до '+n;return {X:'Чек',C:'Колл',F:'Фолд'}[k]||a;}
 function shVerb(a,stack){const k=a[0],n=+a.slice(1);if(shAllin(a,stack))return 'пошёл олл-ин';if(k==='B')return 'поставил '+n;if(k==='R')return 'рейзнул до '+n;return shActShort(a,stack);}
@@ -2891,7 +2892,7 @@ async function shNew(){if(!shOn()||!personalOwner())return;clearTimeout(SH_T);SH
   // hero hand: by combos, borderline classes more likely
   const first=heroSide==='oop'?shNode(h,[]):shNode(h,['X']),cands=[],ws=[];for(const [cls,s] of Object.entries(first.c)){for(const cmb of shExpand(cls)){if(h.board.includes(cmb[0])||h.board.includes(cmb[1]))continue;cands.push(cmb);ws.push(Math.max(...s)<80?3:1);}}
   h.hero=cands[shPick(ws)];h.range=shRangeInit(h,heroSide==='oop'?'ip':'oop');const vi=h.range.filter(x=>!h.hero.includes(x.c[0])&&!h.hero.includes(x.c[1]));h.vill=vi[Math.floor(Math.random()*vi.length)].c;
-  SH=h;H=null;IDLE=false;shPreRun();}
+  {const p=[...SH_SUITS].sort(()=>Math.random()-.5);SH_SP={};[...SH_SUITS].forEach((x,i)=>SH_SP[x]=p[i]);}SH=h;H=null;IDLE=false;shPreRun();}
  catch(e){shIdle('Не удалось загрузить решённые раздачи. Проверь связь и нажми ещё раз.');}}
 const SH_POSMAP={btn:'BTN',bb:'BB',sb:'SB',co:'CO',hj:'HJ',lj:'LJ',utg:'UTG',utg1:'UTG+1',utg2:'UTG+2',utg3:'UTG+3'},SH_POST=['SB','BB','UTG','UTG+1','UTG+2','UTG+3','LJ','HJ','CO','BTN'];
 function shMeta(spot){const m=spot.id.match(/^(?:(srp|3bp)_)?([a-z0-9]+)_([a-z0-9]+)_/)||[],type=m[1]||'srp',A=SH_POSMAP[m[2]]||'BTN',B=SH_POSMAP[m[3]]||'BB';
@@ -3017,13 +3018,13 @@ function shPreText(h,d){const out=[],hand=h.hero.map(shCardTxt).join('');
 // ---------- rendering ----------
 function shRender(){const h=SH;if(!h||!shOn())return;const t=$('#table');t.innerHTML='';const pre=h.phase==='pre';
  const rail=document.createElement('div');rail.className='rail';const felt=document.createElement('div');felt.className='felt';const pot=pre?Object.values(h.pre).reduce((x,y)=>x+y,0):shPot(h);
- const pl=document.createElement('div');pl.className='potline';pl.textContent=`Банк ${pot} · ${String(+(pot/5).toFixed(1)).replace('.',',')} ББ`;const board=document.createElement('div');board.className='board';for(let i=0;i<5;i++)board.appendChild(cardEl(pre?null:h.board[i]||null));
+ const pl=document.createElement('div');pl.className='potline';pl.textContent=`Банк ${pot} · ${String(+(pot/5).toFixed(1)).replace('.',',')} ББ`;const board=document.createElement('div');board.className='board';for(let i=0;i<5;i++)board.appendChild(cardEl(pre?null:shDc(h.board[i])));
  felt.append(pl,board);rail.appendChild(felt);t.appendChild(rail);
  const hi=PT_POS.indexOf(h.heroPos),cur=pre&&!h.over?(h.preWait?h.heroPos:(h.ev[h.pi]||{}).pos):null,lastSide=[...h.log].reverse().find(l=>l.side);
  PT_POS.forEach((pos,i)=>{const hero=pos===h.heroPos,vill=pos===h.villPos,side=hero?h.heroSide:vill?(h.heroSide==='oop'?'ip':'oop'):null,[x,y]=seatXY((i-hi+10)%10,10),s=document.createElement('div');s.className='seat'+(hero?' hero':'');s.style.left=x+'%';s.style.top=y+'%';
   const out=h.folded.has(pos)||!pre&&!side||h.over&&h.outcome==='fold'&&side&&h.winner!==side;
-  if(hero){const hd=document.createElement('div');hd.className='hand';h.hero.forEach(c=>hd.appendChild(cardEl(c,'big')));s.appendChild(hd);}
-  else if(!out){const mini=document.createElement('div');mini.className='mini';if(h.over&&vill&&h.outcome!=='pre')h.vill.forEach(c=>mini.appendChild(cardEl(c,'up')));else for(let j=0;j<2;j++){const b=document.createElement('div');b.className='pc back';mini.appendChild(b);}s.appendChild(mini);}
+  if(hero){const hd=document.createElement('div');hd.className='hand';h.hero.forEach(c=>hd.appendChild(cardEl(shDc(c),'big')));s.appendChild(hd);}
+  else if(!out){const mini=document.createElement('div');mini.className='mini';if(h.over&&vill&&h.outcome!=='pre')h.vill.forEach(c=>mini.appendChild(cardEl(shDc(c),'up')));else for(let j=0;j<2;j++){const b=document.createElement('div');b.className='pc back';mini.appendChild(b);}s.appendChild(mini);}
   if(out)s.classList.add('folded');if(pre?cur===pos:!h.over&&h.node&&side&&h.node.p===side)s.classList.add('turn');
   const stack=side&&!pre?shLeft(h,side):500-(h.pre[pos]||0);
   const pod=document.createElement('div');pod.className='pod';pod.innerHTML='<div class="pos"></div><div class="stk"></div>';pod.firstChild.textContent=pos+(hero?' · ты':'');pod.lastChild.textContent=String(stack);
