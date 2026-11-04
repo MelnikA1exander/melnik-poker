@@ -3241,6 +3241,8 @@ function pcPolicy(data,c){
  else if(L===2&&p===op){kind='vs3b';source=data.deep&&data.deep.v3[map(p)+'>'+map(t3)];spec=source||{R:'KK+,AKs',C:'QQ,JJ,AKo,AQs'};// Little's vs-3-bet charts (pp. 11-15) 4-bet to $166.67 against a 45 or 65 3-bet.
   size=cur<=80?166.67:cur*(ip?2.3:2.6);origin=source?'little-deep-adapted':'adapted';
   // Little's 100 BB continuation is used as is for normal 3-bets (45 IP / 65 OOP); a bigger 3-bet narrows calls.
+  // User decision 04.11: TT, 99 and KQs are call/fold by situation instead of Little's pure fold.
+  if(cur<=80)spec={...spec,CF:[spec.CF,'TT,99,KQs'].filter(Boolean).join(',')};
   if(cur>80){const safe=pcHands('TT+,AQs+,AKo');const s=pcSpec(spec);spec={R:s.R.join(','),C:s.C.filter(h=>safe.has(h)).join(',')};}
  }
  else if(L===2){kind='cold3b';spec={R:'KK+,AKs',C:'QQ,AKo'};size=cur*(ip?2.3:2.6);}
