@@ -2748,7 +2748,7 @@ function personalRefresh(){
  if(!owner){PERSONAL_VIEW=false;PERSONAL_DATA=null;$('#personal-content').replaceChildren();}
  personalSelect(PERSONAL_VIEW&&owner);
  // Preload in the background: the ranges tab and the personal trainer open without waiting for Apps Script.
- if(owner&&!PERSONAL_DATA&&!PERSONAL_LOADING)personalLoad();
+ if(personalOwner()&&!PERSONAL_DATA&&!PERSONAL_LOADING)personalLoad();
 }
 function personalSelect(on){
  PERSONAL_VIEW=!!on&&personalCan();
@@ -2802,7 +2802,7 @@ let PERSONAL_OPENER='UTG';
 async function personalLoad(){
  if(PERSONAL_LOADING||!personalCan())return;PERSONAL_LOADING=true;const token=AUTH.token;
  try{const r=await api('personalRanges',{token});if(!personalCan()||AUTH.token!==token)return;if(!r||!r.ok||!r.data)throw Error('unavailable');PERSONAL_DATA=r.data;}
- catch(e){if(personalCan()&&AUTH.token===token){const p=document.createElement('p');p.className='rnghint';p.textContent='Персональные диапазоны пока недоступны. Нажми, чтобы повторить.';p.onclick=personalLoad;$('#personal-content').replaceChildren(p);}}
+ catch(e){if(personalCan()&&AUTH.token===token){const p=document.createElement('p');p.className='rnghint';p.textContent='Диапазоны пока недоступны. Нажми, чтобы повторить.';p.onclick=personalLoad;$('#personal-content').replaceChildren(p);}}
  finally{PERSONAL_LOADING=false;}
  if(PERSONAL_VIEW&&personalCan()&&AUTH.token===token&&PERSONAL_DATA)personalRender();
 }
