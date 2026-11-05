@@ -458,8 +458,9 @@ body.review .modesrow,body.review .controls,body.review #table,body.review #log,
 
 
 
+
 /* Solver hands */
-body.shmode .playcontrols,body.shmode #filters,body.shmode #stats,body.shmode #sessline,body.shmode #training-filters-button{display:none!important}body.shmode .dec p{margin:4px 0;line-height:1.5;font-size:14px}body.shmode .dech{font-size:15px}
+body.shmode .playcontrols,body.shmode #filters,body.shmode #stats,body.shmode #sessline,body.shmode #training-filters-button{display:none!important}body.shmode .dec p{margin:4px 0;line-height:1.5;font-size:14px}body.shmode .dech{font-size:15px}.table-wrap:has(>.startbtn) .felt .potline{transform:translateY(-62px)}
 </style>
 
 <section class="auth" id="auth" hidden>
@@ -1173,7 +1174,7 @@ function renderTable(h=H){
     if(p.bet>0){ const b=document.createElement('div'); b.className='bet'; const f=i===h.hero?.42:.36;
       b.style.left=(x+(50-x)*f)+'%'; b.style.top=(y+(50-y)*f)+'%'; b.textContent=p.bet; t.appendChild(b); }
     if(i===btnIdx()){ const d=document.createElement('div'); d.className='dealer'; d.textContent='D';
-      const ang=Math.atan2(50-y,50-x)+0.55; d.style.left=(x+Math.cos(ang)*12)+'%'; d.style.top=(y+Math.sin(ang)*12)+'%'; t.appendChild(d); }
+      const ang=Math.atan2(50-y,50-x)+0.55; d.style.left=(x+Math.cos(ang)*12)+'%'; d.style.top=(y+Math.sin(ang)*12)+'%'; if(i===h.hero){ d.style.left=`calc(${x}% - 56px)`; d.style.top=`calc(${y}% + 26px)`; } t.appendChild(d); }
   }
   let txt=h.street>0?postHist(h):contextText(h);
   if(h.anim){}
@@ -3093,7 +3094,7 @@ function shRender(){const h=SH;if(!h||!shOn())return;const t=$('#table');t.inner
   if(!pre&&lastSide&&side&&lastSide.side===side&&!h.over){const ab=document.createElement('div'),k=lastSide.a[0];ab.className='actb '+(k==='F'?'f':k==='C'?'c':k==='X'?'':'r')+' new';ab.textContent=shActShort(lastSide.a,h.stack);pod.appendChild(ab);}
   s.appendChild(pod);t.appendChild(s);
   const bet=pre?h.pre[pos]||0:side?h.bet[side]:0;if(bet>0&&!(pre&&h.folded.has(pos)&&false)){const b=document.createElement('div');b.className='bet';const f=hero?.42:.36;b.style.left=(x+(50-x)*f)+'%';b.style.top=(y+(50-y)*f)+'%';b.textContent=bet;t.appendChild(b);}
-  if(pos==='BTN'){const d=document.createElement('div');d.className='dealer';d.textContent='D';const ang=Math.atan2(50-y,50-x)+0.55;d.style.left=(x+Math.cos(ang)*12)+'%';d.style.top=(y+Math.sin(ang)*12)+'%';t.appendChild(d);}});
+  if(pos==='BTN'){const d=document.createElement('div');d.className='dealer';d.textContent='D';const ang=Math.atan2(50-y,50-x)+0.55;d.style.left=(x+Math.cos(ang)*12)+'%';d.style.top=(y+Math.sin(ang)*12)+'%';if(hero){d.style.left=`calc(${x}% - 56px)`;d.style.top=`calc(${y}% + 26px)`;}t.appendChild(d);}});
  const log=$('#log');log.replaceChildren();const parts=[];let cu=null;for(const l of h.log){if(!l.side){cu=[l.txt];parts.push(cu);}else cu.push(l.txt);}
  const preTxt=h.preLog.filter(Boolean),folds=h.preLog.length-preTxt.length;
  log.textContent=['Префлоп'+(preTxt.length||folds?': '+[folds?'фолды до открытия':'',...preTxt].filter(Boolean).join(', '):'')].concat(parts.map(p=>p[0]+(p.length>1?': '+p.slice(1).join(', '):''))).join(' · ');
@@ -3505,7 +3506,7 @@ function ptIdle(){
  if(!personalTraining())return;clearTimeout(ANIM);ANIM=null;H=null;IDLE=true;PT.question=null;ptRefreshUi();$('#stats').hidden=false;
  $('#table').replaceChildren();const rail=ptElement('div','rail'),felt=ptElement('div','felt');felt.append(ptElement('p','potline',typeof LIT!=='undefined'&&LIT?'J. Little · 2/5 · 100 ББ · '+(PT_OPTIONS.seats===10?10:8)+' игроков':'Personal · 2/5 · 100 ББ'));rail.append(felt);$('#table').append(rail);
  const b=ptElement('button','startbtn','Начать раздачу');b.id='start';b.type='button';b.disabled=PT.loading||!PT.loaded||!PERSONAL_DATA;b.onclick=ptNext;$('#table').append(b);
- idlePanel();$('#log').textContent='10 игроков · 2/5 · 100 ББ · опен 15. '+PT.status;
+ idlePanel();$('#log').textContent=(typeof LIT!=='undefined'&&LIT&&PT_OPTIONS.seats!==10?8:10)+' игроков · 2/5 · 100 ББ · опен 15. '+PT.status;
  ptStats();if(!PT.loaded&&!PT.loading&&!PT.loadAttempted)ptLoad();else if(!PT.loaded&&!PT.loading){const retry=ptElement('button','linkbtn','Повторить загрузку');retry.type='button';retry.onclick=ptLoad;$('#panel').append(retry);}
 }
 function ptSampleHand(ch){
