@@ -3526,7 +3526,7 @@ function ptNext(){
  const oi=kind==='vsopen'?Math.floor(Math.random()*hi):null,heroPos=PT_POS[hi],openerPos=oi==null?null:PT_POS[oi],rangeMode=kind==='open'?'base':PT_OPTIONS.strategy;
  const spec=kind==='open'?(hi===8?PERSONAL_DATA.sb:{R:PERSONAL_DATA.open[heroPos]}):(rangeMode==='polar'?PERSONAL_DATA.polar:PERSONAL_DATA.vs)[openerPos+'>'+heroPos];
  const ch=chart(spec),hand=ptSampleHand(ch),players=PERSONAL_DATA.players.map(x=>({...x}));
- if(PT_OPTIONS.random)for(let i=players.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[players[i],players[j]]=[players[j],players[i]];}
+ if(PT_OPTIONS.random)for(let i=players.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[players[i],players[j]]=[players[j],players[i]];}while(players.length>10)players.splice(1+Math.floor(Math.random()*(players.length-1)),1);
  const seatOf=i=>(i-hi+10)%10;
  PT.question={id:'pt-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10),t:Date.now(),rv:PERSONAL_DATA.version,kind,hi,oi,heroPos,openerPos,rangeMode,ch,hand,cards:ptCards(hand),players,openerName:oi==null?null:players[seatOf(oi)].name,expected:cls(ch,hand),assisted:false,done:false,randomSeating:PT_OPTIONS.random,revealedUntil:-1,animating:true};
  H=null;IDLE=false;clearTimeout(ANIM);ptDraw();sndChips();const q=PT.question;
@@ -3622,9 +3622,11 @@ function petSeats(){return typeof LIT!=='undefined'&&LIT&&PT_OPTIONS.seats!==10?
 function petPos(i){return petSeats()===8?['—','—','UTG','UTG+1','LJ','HJ','CO','BTN','SB','BB'][i]:PT_POS[i];}
 // J. Little mode: every opponent is the base Little model (no profiles, no limps), only the hero keeps the name.
 function petIdealRoster(){const index=PERSONAL_DATA.ownerIndex||0,me={...(PERSONAL_DATA.players||[])[index]||{name:AUTH&&AUTH.login||'Ты',model:'base'}};return [me,...Array.from({length:9},(_,i)=>({name:'Бот',model:'base',note:'',ideal:true}))];}
-function petRoster(){if(typeof LIT!=='undefined'&&LIT)return petIdealRoster();const index=PERSONAL_DATA.ownerIndex||0,a=PERSONAL_DATA.players.slice(index).concat(PERSONAL_DATA.players.slice(0,index)).map(p=>({...p}));if(PT_OPTIONS.random)for(let i=a.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function petRoster(){if(typeof LIT!=='undefined'&&LIT)return petIdealRoster();const index=PERSONAL_DATA.ownerIndex||0,a=PERSONAL_DATA.players.slice(index).concat(PERSONAL_DATA.players.slice(0,index)).map(p=>({...p}));if(PT_OPTIONS.random)for(let i=a.length-1;i>1;i--){const j=1+Math.floor(Math.random()*i);[a[i],a[j]]=[a[j],a[i]];}return petSeat10(a);}
+// More friends than seats: each hand a random friend (never the owner) sits out.
+function petSeat10(a){while(a.length>10)a.splice(1+Math.floor(Math.random()*(a.length-1)),1);return a;}
 function petKey(s){let h=5381;for(const c of String(s||''))h=(h*33+c.codePointAt(0))>>>0;return 'p'+h.toString(36);}
-function petCanLimp(h,p){return ['pz5eycg','pz5abud','p4s01b4'].includes(petKey(h.prof[p].name));}
+function petCanLimp(h,p){return ['pz5eycg','pz5abud','p4s01b4','p1th7clc'].includes(petKey(h.prof[p].name));}
 // Opponent models (04.11, v2). Strong core plays by profile without junk; weak players are wide, too passive or too aggressive,
 // and real junk appears only in limps. Players are keyed by a name hash (petKey).
 // Every action has its own set: open-raise, open-limp, overlimp, isolation, call of a raise, 3-bet.
@@ -3661,6 +3663,7 @@ function petModel(h,p){const d=petDecision(h,p),name=petKey(h.prof[p].name),m=h.
    const open=H('22+,A2s+,A8o+,K5s+,KTo+,Q2s+,QTo+,J8s+,JTo,T8s+,97s+,86s+,75s+,65s,54s'),limp=H('A2o-A7o,K2s-K4s,K8o-K9o,Q9o,J9o,J7s,T9o,T7s,96s,85s,74s,64s,53s,43s,98o,87o,76o');
    if(!limpers){raises=open;calls=limp;}else{raises=H('55+,A8s+,ATo+,KTs+,KJo+,Q9s+,QJo,J9s+,T9s');calls=new Set([...open,...limp].filter(x=>!raises.has(x)));}optional.clear();}
   else if(m==='station'){raises=H('QQ+,AKs,AKo');calls=H('22+,A2s+,A2o+,K2s+,K5o+,Q2s+,Q7o+,J2s+,J7o+,T2s+,T7o+,92s+,97o+,82s+,87o,72s+,76o,62s+,65o,52s+,54o,43s,52o,92o');optional.clear();}
+  else if(m==='fish'){raises=H(limpers?'99+,AJs+,KQs,AQo+':'77+,A9s+,KTs+,QJs,AJo+,KQo');calls=drop(H('22+,A2s+,A2o+,K2s+,K7o+,Q4s+,Q9o+,J6s+,J9o+,T6s+,T9o,96s+,98o,85s+,87o,74s+,76o,64s+,53s+,43s'),limpers?'':'77+,A9s+,KTs+,QJs,AJo+,KQo');optional.clear();}
   else if(m==='passive'){raises=H('KK+,AKs');calls=H('22+,A2s+,A2o+,K2s+,K8o+,Q5s+,Q9o+,J7s+,J9o+,T7s+,T9o,97s+,98o,86s+,87o,75s+,76o,65s,54s,43s,53o');optional.clear();}
  }else if(h.level===1){
   const chartCalls=new Set([...s.C,...(s.RC||[]),...s.CF]);
@@ -3668,6 +3671,7 @@ function petModel(h,p){const d=petDecision(h,p),name=petKey(h.prof[p].name),m=h.
   else if(name==='pz5f9xj'){raises=H(prof.three);calls=drop(new Set([...chartCalls,...s.R,...H(prof.extraCall)]),prof.no);if(!cheap)calls=drop(calls,prof.extraCall);optional.clear();}
   else if(name==='pnes653'){add(raises,'A5s');calls=new Set([...chartCalls,...H(cheap?'22+,A2s+,KTs+,QTs+,JTs,T9s,98s,AJo+,KQo':'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo')]);}
   else if(m==='station'){raises=H('KK+,AKs');calls=H(cheap?'22+,A2s+,ATo+,K9s+,KJo+,Q9s+,QJo,J9s+,T8s+,98s,87s,76s,65s,54s':mid?'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo':'TT+,AQs+,AKo');optional.clear();}
+  else if(m==='fish'){raises=H('QQ+,AKs,AKo,A5s,KQs,AJs');calls=H(cheap?'22+,A2s+,A7o+,K5s+,KTo+,Q7s+,QTo+,J7s+,JTo,T7s+,T9o,96s+,98o,85s+,75s+,64s+,54s':mid?'22+,A8s+,KTs+,QTs+,JTs,T9s,ATo+,KQo':'99+,AJs+,AQo+');optional.clear();}
   else if(m==='passive'){raises=H('KK+');calls=H(cheap?'22+,A2s+,A9o+,K8s+,KTo+,Q9s+,QTo+,J9s+,JTo,T8s+,98s,87s,76s,65s':mid?'66+,ATs+,KJs+,QJs,AQo+':'TT+,AKs,AKo');optional.clear();}
   else if(m==='aggressive'){add(raises,'A5s,A4s,K9s,Q9s');for(const x of chartCalls)calls.add(x);add(calls,cheap?'22+,A2s+,ATo+,K9s+,KJo+,Q9s+,J9s+,T8s+,98s,87s,76s,65s':'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo');}
   else if(m==='wide-aggressive'){add(raises,'A5s-A2s,KJs,QJs,AJo,KQo');for(const x of chartCalls)calls.add(x);add(calls,'55+,ATs+,KTs+,QTs+,JTs,AJo+,KQo');}
@@ -3678,6 +3682,7 @@ function petModel(h,p){const d=petDecision(h,p),name=petKey(h.prof[p].name),m=h.
   if(name==='pz5ghxl'||name==='pz5f9xj'||m==='tight'||m==='tight-passive'||m==='passive'){raises=H('KK+');calls=H(h.curBet>160?'QQ,AKs,AKo':'JJ,QQ,AQs,AKs,AKo');optional.clear();}
   else if(name==='pna6rqc'){raises=H('KK+,AKs');calls=H(h.curBet>160?'QQ,AKo':'TT,JJ,QQ,AQs,AKo');optional.clear();}
   else if(name==='pnes653'){raises=H('KK+');add(optional,'A5s');calls=H(h.curBet>160?'QQ,JJ,AKs,AKo':'88+,AQs+,AQo+');}
+  else if(m==='fish'){raises=H('QQ+,AKs,AKo');calls=H(h.curBet>160?'JJ,TT,AQs,AQo':'66+,ATs+,KQs,AJo+');optional.clear();}
   else if(m==='station'||m==='wide'){raises=H('KK+');calls=H(h.curBet>160?'QQ,AKs,AKo':'88+,AQs+,AQo+');optional.clear();}
   else if(m==='aggressive'){add(optional,'A5s,A4s');}
  }
@@ -3764,7 +3769,7 @@ function petExplain(q){
  if(q.allowed.length>1){const ak=q.allowed.join('');lines.push(ak==='RC'?'Диагональ «колл / 3-бет»: оба ответа засчитываются. 3-бет лучше против широкого опена и соперника, который часто выкидывает; колл — против узкого раннего опена, когда доминация опаснее. Это выбор по ситуации за столом, а не обязательный микс.':ak==='CF'||ak==='XF'?'Диагональ «колл / фолд»: оба ответа засчитываются. Колл лучше в позиции, при пассивных игроках за спиной и мультивее; фолд — если за спиной агрессивные игроки или ты без позиции. Это выбор по ситуации, а не обязательный микс.':'Диагональ «рейз / фолд»: оба ответа засчитываются. Входи при редких 3-бетах за спиной и слабых соперниках; выкидывай, если за спиной агрессивные игроки или ты останешься без позиции. Это выбор по ситуации, а не обязательный микс.');}
  else if(q.allowed[0]==='F'){
   if(q.action==='C'&&call){lines.push(`${price}% — лишь цена входа, не оценка прибыльности. ${c.callers?'Дополнительные коллеры дают мёртвые деньги, но снижают твою долю эквити и вероятность выиграть слабой парой.':'Против диапазона рейзера важна доминация, а не только привлекательность двух карт.'}`);if(pair)lines.push(`До стека соперника остаётся около ${ratio} доплат. Сет приходит на флоп примерно в 12% случаев, а полная оплата не гарантирована; колл нельзя оправдать одним сет-майнингом.`);else if(!suited)lines.push('Разномастная рука редко собирает натсовый флеш, а попадание в старшую карту может проигрывать лучшему кикеру. Крупный банк усиливает обратные потенциальные шансы.');else lines.push('Одномастность помогает реализации, но не компенсирует автоматически слишком сильный диапазон и игроков, способных повысить после тебя.');}
-  else if(q.action==='R'){lines.push('У этого повышения нет достаточной базы: для велью нужны худшие коллы, для блефа — достаточно фолдов. Сам по себе блокер или желание забрать мёртвые деньги не заменяет эти условия.');if(!suited&&!pair){const examples=petDominators(hand);if(examples)lines.push(`${hand} уязвима к доминации: существенная часть продолжений с ${examples} выигрывает у тебя при совпадении старшей пары. Изоляция не превращает слабый кикер в велью.`);}if(q.villain&&['station','passive','wide'].includes(q.villain.model))lines.push(`${q.villain.name} ожидаемо продолжает широко. Это помогает добирать сильной рукой, но уменьшает фолд-эквити слабого рейза; не расширяй изоляцию одним желанием остаться один на один.`);}
+  else if(q.action==='R'){lines.push('У этого повышения нет достаточной базы: для велью нужны худшие коллы, для блефа — достаточно фолдов. Сам по себе блокер или желание забрать мёртвые деньги не заменяет эти условия.');if(!suited&&!pair){const examples=petDominators(hand);if(examples)lines.push(`${hand} уязвима к доминации: существенная часть продолжений с ${examples} выигрывает у тебя при совпадении старшей пары. Изоляция не превращает слабый кикер в велью.`);}if(q.villain&&['station','passive','wide','fish'].includes(q.villain.model))lines.push(`${q.villain.name} ожидаемо продолжает широко. Это помогает добирать сильной рукой, но уменьшает фолд-эквити слабого рейза; не расширяй изоляцию одним желанием остаться один на один.`);}
   else lines.push('Отказ от входа сохраняет стек для рук, которые лучше реализуют эквити против этого диапазона и цены.');
  }else if(q.allowed[0]==='R'){
   if(d.kind==='open')lines.push(`${hand} достаточно сильна для входа с ${pos}. ${pair?'Пара имеет готовое шоудаун-велью и может собрать сет.':suited&&ace?'Одномастный туз сочетает натсовый потенциал с блокером на сильные тузы.':suited?'Высокие связанные одномастные карты лучше реализуют эквити и чаще собирают сильные дро.':'Высокие карты могут доминировать часть коллов соперников.'} Размер ${d.personalSize} применяется ко всему открытию, а не выдаёт силу руки.`);
